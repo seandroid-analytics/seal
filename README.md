@@ -49,4 +49,6 @@ You can report bugs in the project [issue tracker](https://github.com/seandroid-
 ## License
 Copyright 2015 Filippo Bonazzi
 
-SEAL is licensed under the Apache License 2.0 (see LICENSE)
+SEAL is licensed under the Apache License 2.0 (see LICENSE).
+
+SEAL is an open source project being developed at Aalto University as part of the [Intel Collaborative Research Institute for Secure Computing (ICRI-SC)](http://www.icri-sc.org).
