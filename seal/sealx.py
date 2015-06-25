@@ -162,14 +162,13 @@ class App(Frame):
         # Get files
         self.filteringby_string.set("files")
         self.show_progressbar()
-        self.worker_thread = threading.Thread(
-                target=self.get_files_bg, args=[self.device])
+        self.worker_thread = threading.Thread(target=self.get_files_bg)
         self.worker_thread.start()
         self.after(100, self.worker_callback)
 
-    def get_files_bg(self, device, path='/'):
+    def get_files_bg(self, path='/'):
         """Get the file list from the device"""
-        self.files = seal.get_files(device, path)
+        self.files = seal.get_files(self.device, self.root_adb, path)
 
     def worker_callback(self):
         """Callback when the file list has been fetched from the device"""

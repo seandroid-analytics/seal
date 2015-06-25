@@ -246,16 +246,16 @@ class ProcessOnDevice(object):
     def __hash__(self):
         return int(self._pid)
 
-def get_adb_call(root_adb, device, command):
+def get_adb_call(device, root_adb, command):
     """Return a list representing the adb command to run the command string"""
     call = [adb, "-s", device, "shell"]
     if root_adb == "root_adb":
         # Root adb-specific things
         pass
-    if root_adb == "root_shell":
+    elif root_adb == "root_shell":
         # Root shell-specific things
         call.extend(["su", "-c"])
-    if root_adb == "not_root":
+    elif root_adb == "not_root":
         # Non root-specific things
         pass
     call.extend(shlex.split(command))
@@ -265,19 +265,27 @@ def check_root_adb(device):
     """Check what level of root we can get on the device.
     This function cannot use get_adb_call, as that requires
     this function to be run first."""
-    # Run adb as root
+    # Initially assume we are not root
+    root_adb = "not_root"
+    # Check for increasingly high privilege levels
+    # Check wether 'su' exists
+    root_status = check_output(
+            [adb, "-s", device, "shell", "command", "-v", "su"]).strip('\r\n')
+    # If su exists, check if we can be root
+    if root_status:
+        root_status = check_output(
+                [adb, "-s", device, "shell", "su", "-c", "id"]).strip('\r\n')
+        if "uid=0(root) gid=0(root)" in root_status:
+            # We have a root shell
+            root_adb = "root_shell"
+    # Try running adb as root
     root_status = check_output([adb, "-s", device, "root"]).strip('\r\n')
     if (root_status == "adbd is already running as root" or
             root_status == "restarting adbd as root"):
         # We have root
-        return "root_adb"
-    root_status = check_output(
-            [adb, "-s", device, "shell", "su", "-c", "id"]).strip('\r\n')
-    if "uid=0(root) gid=0(root)" in root_status:
-        # We have a root shell
-        return "root_shell"
-    # We don't have root
-    return "not_root"
+        root_adb = "root_adb"
+    # Return our level of root
+    return root_adb
 
 def check_adb():
     """Start adb if not started already"""
@@ -437,15 +445,14 @@ def process_picker(args, procs):
                 break
     return p
 
-def get_files(device, path='/', single_file=False):
+def get_files(device, root_adb, path='/', single_file=False):
     """Get the files under the given path from a connected device"""
     files_dict = {}
     path = os.path.normpath(path)
     if device is None:
         return None
-    listing = check_output(
-            [adb, "-s", device, "shell", "su", "-c", "ls", "-RZ", path]
-            ).split('\r\n')
+    cmd = get_adb_call(device, root_adb, 'ls -RZ {}'.format(path))
+    listing = check_output(cmd).split('\r\n')
     # Parse ls -RZ output for a single file
     if single_file:
         try:
@@ -489,14 +496,15 @@ def files(args):
     if not initialise_device(args):
         sys.exit(1)
 
-    args.root_adb = check_root_adb(args.device)
-    if args.root_adb == "not_root":
-        print "WARNING: Adb can not run as root on the device."
-        print "Information shown by the tool will be incomplete."
+    #TODO delete
+    #args.root_adb = check_root_adb(args.device)
+    #if args.root_adb == "not_root":
+    #    print "WARNING: Adb can not run as root on the device."
+    #    print "Information shown by the tool will be incomplete."
 
     global files_on_device_no
     if not args.pid and not args.process: # Just list all the files
-        files_dict = get_files(args.device)
+        files_dict = get_files(args.device, args.root_adb)
         files_on_device_no = len(files_dict.keys())
         accessible_files, file_permissions = files_filter(None, None, files_dict)
         print_files(args, None, accessible_files, file_permissions)
@@ -517,7 +525,7 @@ def files(args):
 
         print 'The "{}" process with PID {} is running in the "{}" context'.format(
                 process.name, process.pid, process.context)
-        files_dict = get_files(args.device)
+        files_dict = get_files(args.device, args.root_adb)
         files_on_device_no = len(files_dict.keys())
         accessible_files, file_permissions = files_filter(p, process, files_dict)
         print_files(args, process, accessible_files, file_permissions)
@@ -638,12 +646,12 @@ def processes(args):
             print "You need to provide either a policy or a running Android device"
             sys.exit(1)
         if args.file:
-            files_dict = get_files(args.device, args.file, True)
+            files_dict = get_files(args.device, args.root_adb, args.file, True)
             if files_dict is None:
                 print 'File "{}" does not exist.'.format(args.file)
                 sys.exit(1)
         else:
-            files_dict = get_files(args.device, args.path)
+            files_dict = get_files(args.device, args.root_adb, args.path)
             if files_dict is None:
                 print 'Folder "{}" does not exist.'.format(args.path)
                 sys.exit(1)

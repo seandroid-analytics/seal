@@ -1,6 +1,7 @@
 ## SEAL: SEAndroid Analytics Library for live device analysis
 
 [SEAL](https://github.com/seandroid-analytics/seal/wiki) is a SEAndroid live device analysis tool. It can perform policy analysis on Android devices (real or emulated) connected through ADB.
+Devices must be rooted or running a debug build. Running the tool on a non-rooted production device will yield incomplete results.
 ```
 usage: seal [-h] [--adb ADB] [--device <DEVICE>]
                {polinfo,files,processes} ...
