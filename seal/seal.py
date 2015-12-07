@@ -1,6 +1,7 @@
 #!/usr/bin/python2
 #
-# Copyright 2015 Filippo Bonazzi
+# Written by Filippo Bonazzi
+# Copyright (C) 2015 Aalto University
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,17 +33,19 @@ adb = "adb"
 processes_on_device_no = 0
 files_on_device_no = 0
 
+
 class FileOnDevice(object):
     """Class providing an abstraction for a file on the device"""
-    file_class_converter = {'-': 'file',        'file':         '-', # File
-                            'd': 'dir',         'dir':          'd', # Directory
-                            'c': 'chr_file',    'chr_file':     'c', # Character device
-                            'l': 'lnk_file',    'lnk_file':     'l', # Symlink
-                            'p': 'fifo_file',   'fifo_file':    'p', # Named pipe
-                            's': 'sock_file',   'sock_file':    's', # Socket
-                            'b': 'blk_file',    'blk_file':     'b'} # Block device
+    file_class_converter = {'-': 'file',        'file':         '-',  # File
+                            'd': 'dir',         'dir':          'd',  # Directory
+                            'c': 'chr_file',    'chr_file':     'c',  # Character device
+                            'l': 'lnk_file',    'lnk_file':     'l',  # Symlink
+                            'p': 'fifo_file',   'fifo_file':    'p',  # Named pipe
+                            's': 'sock_file',   'sock_file':    's',  # Socket
+                            'b': 'blk_file',    'blk_file':     'b'}  # Block device
 
-    correct_line = ('[-dclpsb][-rwxst]{9}\\s+[^\\s]+\\s+[^\\s]+\\s+[^\\s:]+:[^\\s:]+:[^\\s:]+:[^\\s:]+\\s+.*')
+    correct_line = (
+        '[-dclpsb][-rwxst]{9}\\s+[^\\s]+\\s+[^\\s]+\\s+[^\\s:]+:[^\\s:]+:[^\\s:]+:[^\\s:]+\\s+.*')
 
     def __init__(self, l, d):
         if not re.match(FileOnDevice.correct_line, l):
@@ -166,9 +169,12 @@ class FileOnDevice(object):
     def __hash__(self):
         return hash(self._absname)
 
+
 class ProcessOnDevice(object):
     """Class providing an abstraction for a process on the device"""
-    correct_line = ('[^\\s:]+:[^\\s:]+:[^\\s:]+:[^\\s:]+\\s+[^\\s]+\\s+[0-9]+\\s+[0-9]+\\s+[^\\s]+.*')
+    correct_line = (
+        '[^\\s:]+:[^\\s:]+:[^\\s:]+:[^\\s:]+\\s+[^\\s]+\\s+[0-9]+\\s+[0-9]+\\s+[^\\s]+.*')
+
     def __init__(self, line):
         if not re.match(ProcessOnDevice.correct_line, line):
             raise Exception('Bad process "{}"'.format(line))
@@ -246,6 +252,7 @@ class ProcessOnDevice(object):
     def __hash__(self):
         return int(self._pid)
 
+
 def get_adb_call(device, root_adb, command):
     """Return a list representing the adb command to run the command string"""
     call = [adb, "-s", device, "shell"]
@@ -261,6 +268,7 @@ def get_adb_call(device, root_adb, command):
     call.extend(shlex.split(command))
     return call
 
+
 def check_root_adb(device):
     """Check what level of root we can get on the device.
     This function cannot use get_adb_call, as that requires
@@ -270,11 +278,11 @@ def check_root_adb(device):
     # Check for increasingly high privilege levels
     # Check wether 'su' exists
     root_status = check_output(
-            [adb, "-s", device, "shell", "command", "-v", "su"]).strip('\r\n')
+        [adb, "-s", device, "shell", "command", "-v", "su"]).strip('\r\n')
     # If su exists, check if we can be root
     if root_status:
         root_status = check_output(
-                [adb, "-s", device, "shell", "su", "-c", "id"]).strip('\r\n')
+            [adb, "-s", device, "shell", "su", "-c", "id"]).strip('\r\n')
         if "uid=0(root) gid=0(root)" in root_status:
             # We have a root shell
             root_adb = "root_shell"
@@ -287,12 +295,13 @@ def check_root_adb(device):
     # Return our level of root
     return root_adb
 
+
 def check_adb():
     """Start adb if not started already"""
     try:
         with open(os.devnull, "w") as devnull:
             check_call(["pgrep", "adb"], stdout=devnull)
-    except CalledProcessError: # adb is not running
+    except CalledProcessError:  # adb is not running
         try:
             check_call([adb, "devices"])
         except CalledProcessError:
@@ -300,12 +309,14 @@ def check_adb():
             return False
     return True
 
+
 def get_devices():
     """Select one of the devices connected through adb"""
     # Split by newline and remove first line ("List of devices attached")
     devices = check_output([adb, "devices", "-l"]).split('\n')[1:]
-    devices = [x for x in devices if x] # Remove empty strings
+    devices = [x for x in devices if x]  # Remove empty strings
     return devices
+
 
 def device_picker():
     """Select one of the devices"""
@@ -320,12 +331,13 @@ def device_picker():
         while True:
             print "Choose a device:"
             for i, x in enumerate(devices):
-                #TODO might want to change the formatting of x
+                # TODO might want to change the formatting of x
                 print "[{}]\t{}".format(i, x)
             choice = raw_input("> ")
             if choice in [str(x) for x in range(len(devices))]:
                 break
     return devices[int(choice)].split()[0]
+
 
 def setup_policy(sepolicy, device):
     """Return a policy object, initialised from either a policy file or
@@ -338,7 +350,7 @@ def setup_policy(sepolicy, device):
         tmp_dir = tempfile.mkdtemp()
         policy_file = "/sys/fs/selinux/policy"
         sepolicy = os.path.join(tmp_dir, "sepolicy")
-        #TODO remove the directory once we're done with the policy
+        # TODO remove the directory once we're done with the policy
         try:
             check_call([adb, "-s", device, "pull", policy_file, sepolicy])
         except CalledProcessError:
@@ -350,6 +362,7 @@ def setup_policy(sepolicy, device):
 
     p = Policy(sepolicy)
     return p
+
 
 def polinfo(args):
     """Print policy information"""
@@ -363,8 +376,8 @@ def polinfo(args):
         sys.exit(1)
 
     print "Device {} is running Android {} with SELinux in {} mode.".format(
-            args.device, get_android_version(args.device),
-            get_selinux_mode(args.device).lower())
+        args.device, get_android_version(args.device),
+        get_selinux_mode(args.device).lower())
 
     if args.info_domains:
         print "The policy contains {} domains:".format(len(p.domains))
@@ -396,16 +409,19 @@ def polinfo(args):
         print "Role_trans rules:\t{}".format(len(p.role_trans))
         print "Range_trans rules:\t{}".format(len(p.range_trans))
 
+
 def get_android_version(device):
     """Get the Android version from a connected device"""
     return check_output(
-            [adb, "-s", device, "shell", "getprop", "ro.build.version.release"]
-            ).strip('\r\n')
+        [adb, "-s", device, "shell", "getprop", "ro.build.version.release"]
+    ).strip('\r\n')
+
 
 def get_selinux_mode(device):
     """Get the SELinux mode from a connected device"""
     return check_output(
-            [adb, "-s", device, "shell", "getenforce"]).strip('\r\n')
+        [adb, "-s", device, "shell", "getenforce"]).strip('\r\n')
+
 
 def get_processes(device):
     """Get the processes from a connected device"""
@@ -414,7 +430,7 @@ def get_processes(device):
     procs = {}
     # Split by newlines and remove first line ("LABEL USER PID PPID NAME")
     ps = check_output(
-            [adb, "-s", device, "shell", "ps", "-Z"]).split('\r\n')[1:]
+        [adb, "-s", device, "shell", "ps", "-Z"]).split('\r\n')[1:]
     for line in ps:
         if line:
             try:
@@ -424,6 +440,7 @@ def get_processes(device):
                 continue
             procs[p.pid] = p
     return procs
+
 
 def process_picker(args, procs):
     """Pick a process according to the command line arguments"""
@@ -444,6 +461,7 @@ def process_picker(args, procs):
                 p = i
                 break
     return p
+
 
 def get_files(device, root_adb, path='/', single_file=False):
     """Get the files under the given path from a connected device"""
@@ -469,11 +487,11 @@ def get_files(device, root_adb, path='/', single_file=False):
     new_dir = False
     firstrun = True
     for i in listing:
-        if new_dir: # Initialise new directory
+        if new_dir:  # Initialise new directory
             d = i.strip(':')
             new_dir = False
             continue
-        if not i: # If the current line is empty, request new directory
+        if not i:  # If the current line is empty, request new directory
             new_dir = True
             firstrun = False
             continue
@@ -490,23 +508,25 @@ def get_files(device, root_adb, path='/', single_file=False):
         files_dict[f.absname] = f
     return files_dict
 
+
 def files(args):
     """List files from a device, with the option
     to filter by process that can access them"""
     if not initialise_device(args):
         sys.exit(1)
 
-    #TODO delete
+    # TODO delete
     #args.root_adb = check_root_adb(args.device)
-    #if args.root_adb == "not_root":
+    # if args.root_adb == "not_root":
     #    print "WARNING: Adb can not run as root on the device."
     #    print "Information shown by the tool will be incomplete."
 
     global files_on_device_no
-    if not args.pid and not args.process: # Just list all the files
+    if not args.pid and not args.process:  # Just list all the files
         files_dict = get_files(args.device, args.root_adb)
         files_on_device_no = len(files_dict.keys())
-        accessible_files, file_permissions = files_filter(None, None, files_dict)
+        accessible_files, file_permissions = files_filter(
+            None, None, files_dict)
         print_files(args, None, accessible_files, file_permissions)
     else:
         p = setup_policy(None, args.device)
@@ -524,11 +544,13 @@ def files(args):
             sys.exit(1)
 
         print 'The "{}" process with PID {} is running in the "{}" context'.format(
-                process.name, process.pid, process.context)
+            process.name, process.pid, process.context)
         files_dict = get_files(args.device, args.root_adb)
         files_on_device_no = len(files_dict.keys())
-        accessible_files, file_permissions = files_filter(p, process, files_dict)
+        accessible_files, file_permissions = files_filter(
+            p, process, files_dict)
         print_files(args, process, accessible_files, file_permissions)
+
 
 def files_filter(policy, process, files_dict):
     """Filter files by a process that can access them"""
@@ -539,12 +561,12 @@ def files_filter(policy, process, files_dict):
         accessible_types = policy.get_types_accessible_by(process.context)
     file_permissions = defaultdict(set)
 
-    if accessible_types is None: # Just list all files
+    if accessible_types is None:  # Just list all files
         for f in files_dict.values():
             accessible_files[f.context].append(f)
     else:
         for f in files_dict.values():
-            #TODO expand matching to full context?
+            # TODO expand matching to full context?
             if f.context.type in accessible_types:
                 # We have some rule to this target type
                 first_match = True
@@ -557,21 +579,24 @@ def files_filter(policy, process, files_dict):
                             first_match = False
     return [accessible_files, file_permissions]
 
+
 def print_files(args, process, accessible_files, file_permissions):
     """Print the filtered files"""
     extension = "txt"
     # Sanitize arguments
     device_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-', args.device)
     if args.out:
-        file_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-', os.path.basename(args.out))
+        file_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-',
+                          os.path.basename(args.out))
     if process is not None:
         process_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-', process.name)
 
-    i = 0 # File counter (files stored in nested dicts, count while processing)
+    # File counter (files stored in nested dicts, count while processing)
+    i = 0
     if args.out:
         if process is not None:
             output = "{}_files_{}_{}_{}_{}.{}".format(file_out, device_out,
-                    process.pid, process.context, process_out, extension)
+                                                      process.pid, process.context, process_out, extension)
         else:
             output = "{}_files_{}.{}".format(file_out, device_out, extension)
         print 'Printing to "{}"...'.format(output)
@@ -580,37 +605,38 @@ def print_files(args, process, accessible_files, file_permissions):
                 i += len(fc)
                 for f in fc:
                     out_line = f.absname
-                    if args.context: # -Z or --context option
+                    if args.context:  # -Z or --context option
                         out_line = "{} {}".format(f.context, out_line)
                     # --permissions option requires a process
                     if args.permissions and process is not None:
                         out_line = "{}\t{} {{{}}}".format(out_line,
-                                f.security_class, " ".join(sorted(file_permissions[f])))
+                                                          f.security_class, " ".join(sorted(file_permissions[f])))
                     print>>thefile, out_line
     else:
         for fc in accessible_files.values():
             i += len(fc)
             for f in fc:
                 out_line = f.absname
-                if args.context: # -Z or --context option
+                if args.context:  # -Z or --context option
                     out_line = "{} {}".format(f.context, out_line)
                 # --permissions option requires a process
                 if args.permissions and process is not None:
                     out_line = "{}\t{} {{{}}}".format(out_line,
-                            f.security_class, " ".join(sorted(file_permissions[f])))
+                                                      f.security_class, " ".join(sorted(file_permissions[f])))
                 print out_line
 
     print "The device contains {} files.".format(files_on_device_no)
     if process is not None:
         print "The process has access to {} files.".format(i)
 
+
 def initialise_device(args):
     """Initialise a device"""
-    if not args.device: # Pick a device
+    if not args.device:  # Pick a device
         args.device = device_picker()
         if args.device is None:
             return False
-    else: # Verify a user-provided device
+    else:  # Verify a user-provided device
         try:
             check_call([adb, "-s", args.device, "shell", "true"])
         except CalledProcessError:
@@ -625,6 +651,8 @@ def initialise_device(args):
 
 ########################################
 # Processes
+
+
 def processes(args):
     """List processes on a device, with the option
     to filter by a file they can access"""
@@ -634,12 +662,12 @@ def processes(args):
     processes_dict = get_processes(args.device)
     global processes_on_device_no
     processes_on_device_no = len(processes_dict.keys())
-    if not args.file and not args.path: # Just list all the processes
+    if not args.file and not args.path:  # Just list all the processes
         result = processes_filter(None, None, processes_dict)
         allowed_processes_by_file = result[0]
         process_permissions_by_file = result[1]
         print_processes(args, None, allowed_processes_by_file,
-                process_permissions_by_file)
+                        process_permissions_by_file)
     else:
         p = setup_policy(None, args.device)
         if p is None:
@@ -659,7 +687,8 @@ def processes(args):
         allowed_processes_by_file = result[0]
         process_permissions_by_file = result[1]
         print_processes(args, files_dict, allowed_processes_by_file,
-                process_permissions_by_file)
+                        process_permissions_by_file)
+
 
 def processes_filter(policy, files_dict, processes_dict):
     """Filter processes by one or more files they can access"""
@@ -672,12 +701,13 @@ def processes_filter(policy, files_dict, processes_dict):
         domains_by_target = defaultdict()
         for f in files_dict.values():
             if f.context.type not in domains_by_target.keys():
-                domains_by_target[f.context.type] = policy.get_domains_allowed_to(f.context)
+                domains_by_target[
+                    f.context.type] = policy.get_domains_allowed_to(f.context)
             allowed_domains_by_file[f] = domains_by_target[f.context.type]
 
     process_permissions_by_file = defaultdict(lambda: defaultdict(set))
 
-    if allowed_domains_by_file is None: # No files, list all processes
+    if allowed_domains_by_file is None:  # No files, list all processes
         allowed_processes_by_file[None] = processes_dict
     else:
         for f in files_dict.values():
@@ -688,20 +718,23 @@ def processes_filter(policy, files_dict, processes_dict):
                     for r in allowed_domains_by_file[f][p.context.type]:
                         if f.security_class == r.security_class:
                             # We have some rule applicable to this file class
-                            (process_permissions_by_file[f])[p].update(r.permissions)
+                            (process_permissions_by_file[f])[
+                                p].update(r.permissions)
                             if first_match:
                                 allowed_processes_by_file[f].append(p)
                                 first_match = False
     return [allowed_processes_by_file, process_permissions_by_file]
 
+
 def print_processes(args, files_dict, allowed_processes_by_file,
-        process_permissions_by_file):
+                    process_permissions_by_file):
     """Print filtered processes"""
     extension = "txt"
     # Sanitize arguments
     device_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-', args.device)
     if args.out:
-        file_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-', os.path.basename(args.out))
+        file_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-',
+                          os.path.basename(args.out))
     if args.file:
         filep_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-', args.file)
     if args.path:
@@ -711,18 +744,18 @@ def print_processes(args, files_dict, allowed_processes_by_file,
         if files_dict is not None:
             if args.file:
                 output = "{}_processes_{}_{}.{}".format(
-                        file_out, device_out, filep_out, extension)
+                    file_out, device_out, filep_out, extension)
             else:
                 output = "{}_processes_{}_{}.{}".format(
-                        file_out, device_out, path_out, extension)
+                    file_out, device_out, path_out, extension)
         else:
             output = "{}_processes_{}.{}".format(
-                    file_out, device_out, extension)
+                file_out, device_out, extension)
         print 'Printing to "{}"...'.format(output)
         with open(output, "w") as thefile:
-            if files_dict is None: # Just print all processes
+            if files_dict is None:  # Just print all processes
                 print>>thefile, 'There are {} processes running on the device:'.format(
-                        processes_on_device_no)
+                    processes_on_device_no)
                 for p in allowed_processes_by_file[None].values():
                     # Setup output line
                     out_line = "\t{}\t{}".format(p.pid, p.name)
@@ -731,10 +764,10 @@ def print_processes(args, files_dict, allowed_processes_by_file,
                     print>>thefile, out_line
             else:
                 print>>thefile, 'There are {} processes running on the device.'.format(
-                        processes_on_device_no)
+                    processes_on_device_no)
                 for f, procs_list in allowed_processes_by_file.iteritems():
                     print>>thefile, 'The {} "{}" in the context "{}" can be accessed by {} processes:'.format(
-                            f.security_class, f, f.context, len(procs_list))
+                        f.security_class, f, f.context, len(procs_list))
                     for p in procs_list:
                         # Setup output line
                         out_line = "\t{}\t{}".format(p.pid, p.name)
@@ -742,10 +775,10 @@ def print_processes(args, files_dict, allowed_processes_by_file,
                             out_line = "\t{}{}".format(p.context, out_line)
                         if args.permissions:
                             out_line = "{}\t{{{}}}".format(out_line,
-                                    " ".join(sorted(process_permissions_by_file[f][p])))
+                                                           " ".join(sorted(process_permissions_by_file[f][p])))
                         print>>thefile, out_line
     else:
-        if files_dict is None: # Just print all processes
+        if files_dict is None:  # Just print all processes
             print 'There are {} processes running on the device:'.format(
                 processes_on_device_no)
             for p in allowed_processes_by_file[None].values():
@@ -759,7 +792,7 @@ def print_processes(args, files_dict, allowed_processes_by_file,
                 processes_on_device_no)
             for f, procs_list in allowed_processes_by_file.iteritems():
                 print 'The {} "{}" in the context "{}" can be accessed by {} processes:'.format(
-                        f.security_class, f, f.context, len(procs_list))
+                    f.security_class, f, f.context, len(procs_list))
                 for p in procs_list:
                     # Setup output line
                     out_line = "\t{}\t{}".format(p.pid, p.name)
@@ -767,59 +800,60 @@ def print_processes(args, files_dict, allowed_processes_by_file,
                         out_line = "\t{}{}".format(p.context, out_line)
                     if args.permissions:
                         out_line = "{}\t{{{}}}".format(out_line,
-                                " ".join(sorted(process_permissions_by_file[f][p])))
+                                                       " ".join(sorted(process_permissions_by_file[f][p])))
                     print out_line
+
 
 def main():
     """The main function"""
     parser = argparse.ArgumentParser()
     parser.add_argument('--adb',
-            help="Path to your local root adb if not in your $PATH")
+                        help="Path to your local root adb if not in your $PATH")
     parser.add_argument('--device',
-            help="Specify a device to work with", metavar="<DEVICE>")
+                        help="Specify a device to work with", metavar="<DEVICE>")
     subparsers = parser.add_subparsers(help='sub-command help')
     # Subparser for polinfo
     parser_polinfo = subparsers.add_parser('polinfo',
-            help='Show policy info from device')
+                                           help='Show policy info from device')
     parser_polinfo.add_argument('--policy',
-            help="Show policy info from <FILE>", metavar="<FILE>")
+                                help="Show policy info from <FILE>", metavar="<FILE>")
     parser_polinfo.add_argument('--domains',
-            help="Print the domains in the policy",
-            action='store_true', dest="info_domains")
+                                help="Print the domains in the policy",
+                                action='store_true', dest="info_domains")
     parser_polinfo.set_defaults(func=polinfo)
     # Subparser for files
     parser_files = subparsers.add_parser('files',
-            help='List all files on the device')
+                                         help='List all files on the device')
     parser_files.add_argument('-Z', "--context",
-            action='store_true', help='print the context of each file')
+                              action='store_true', help='print the context of each file')
     parser_files.add_argument('--process',
-            help="List files that process named <PROCESS> can access",
-            metavar="<PROCESS>")
+                              help="List files that process named <PROCESS> can access",
+                              metavar="<PROCESS>")
     parser_files.add_argument('--pid',
-            help="List files that process with PID <PID> can access",
-            metavar="<PID>")
+                              help="List files that process with PID <PID> can access",
+                              metavar="<PID>")
     parser_files.add_argument('--permissions',
-            help='Print SELinux permissions for every file',
-            action='store_true')
+                              help='Print SELinux permissions for every file',
+                              action='store_true')
     parser_files.add_argument("-o", "--out",
-            help="Write the file list to a file")
+                              help="Write the file list to a file")
     parser_files.set_defaults(func=files)
     # Subparser for processes
     parser_processes = subparsers.add_parser('processes',
-            help='List all processes on the device')
+                                             help='List all processes on the device')
     parser_processes.add_argument('-Z', "--context", action='store_true',
-            help='print the context of each process')
+                                  help='print the context of each process')
     parser_processes.add_argument('--file',
-            help="List processes that can access file <FILE>",
-            metavar="<FILE>")
+                                  help="List processes that can access file <FILE>",
+                                  metavar="<FILE>")
     parser_processes.add_argument('--path',
-            help="List processes that can access files under path <PATH>",
-            metavar="<PATH>")
+                                  help="List processes that can access files under path <PATH>",
+                                  metavar="<PATH>")
     parser_processes.add_argument('--permissions',
-            help='Print SELinux permissions by each process on each file it has access to',
-            action='store_true')
+                                  help='Print SELinux permissions by each process on each file it has access to',
+                                  action='store_true')
     parser_processes.add_argument("-o", "--out",
-            help="Write the process list to a file")
+                                  help="Write the process list to a file")
     parser_processes.set_defaults(func=processes)
 
     args = parser.parse_args()

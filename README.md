@@ -48,7 +48,7 @@ To run the graphical version:
 You can report bugs in the project [issue tracker](https://github.com/seandroid-analytics/seal/issues).
 
 ## License
-Copyright 2015 Filippo Bonazzi
+Copyright (C) 2015 Aalto University
 
 SEAL is licensed under the Apache License 2.0 (see LICENSE).
 

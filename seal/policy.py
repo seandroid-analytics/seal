@@ -1,5 +1,6 @@
 #
-# Copyright 2015 Filippo Bonazzi
+# Written by Filippo Bonazzi
+# Copyright (C) 2015 Aalto University
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,8 +20,10 @@ and its components"""
 from setools import apol, qpol
 from collections import defaultdict
 
+
 class Context(object):
     """Class providing an abstraction for a SELinux context"""
+
     def __init__(self, context):
         if context and len(context.split(':')) == 4:
             self._user = context.split(':')[0]
@@ -52,7 +55,7 @@ class Context(object):
 
     def __repr__(self):
         return "{}:{}:{}:{}".format(
-                self._user, self._role, self._type, self._sens)
+            self._user, self._role, self._type, self._sens)
 
     def __eq__(self, other):
         if str(self) == str(other):
@@ -63,8 +66,10 @@ class Context(object):
     def __hash__(self):
         return hash(str(self))
 
+
 class AVRule(object):
     """Class providing an abstraction for a SELinux AVRule"""
+
     def __init__(self, rule, policy):
         if policy is None:
             raise Exception("Bad policy")
@@ -76,7 +81,7 @@ class AVRule(object):
         self._rule = rule
 
         text_rule = apol.apol_avrule_render(self._policy, self._rule)
-        #Textual rule parsing is easier
+        # Textual rule parsing is easier
         try:
             r = text_rule.split(None, 5)
             self._type = r[0]
@@ -116,15 +121,17 @@ class AVRule(object):
     def __repr__(self):
         return apol.apol_avrule_render(self._policy, self._rule)
 
+
 class Policy(object):
     """Class providing an abstraction for the SELinux policy"""
+
     def __init__(self, filename):
         if filename is None or not filename:
             raise IOError('Invalid policy file')
 
         self.name = filename
         self._policy_path = apol.apol_policy_path_t(
-                apol.APOL_POLICY_PATH_TYPE_MONOLITHIC, filename, None)
+            apol.APOL_POLICY_PATH_TYPE_MONOLITHIC, filename, None)
         self._policy = apol.apol_policy_t(self._policy_path)
 
         if self._policy.this is None:

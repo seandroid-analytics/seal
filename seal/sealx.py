@@ -1,6 +1,7 @@
 #!/usr/bin/python2
 #
-# Copyright 2015 Filippo Bonazzi
+# Written by Filippo Bonazzi
+# Copyright (C) 2015 Aalto University
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,19 +26,22 @@ import threading
 
 import seal
 
+
 class DevicePicker(tkSimpleDialog.Dialog):
     """A device picker popup"""
+
     def body(self, master):
         self.focus_set()
-        Label(master, text="Select a device:").grid(row=0, column=0, sticky=W+N)
+        Label(master, text="Select a device:").grid(
+            row=0, column=0, sticky=W + N)
         devices = seal.get_devices()
         if not devices:
             print "No devices connected"
             tkMessageBox.showerror("Fatal error", "No devices connected")
             master.quit()
         self.devices_cb = Combobox(master, state='readonly', values=devices,
-                width=len(max(devices, key=len))-20)
-        self.devices_cb.grid(row=1, column=0, sticky=N+S+E+W)
+                                   width=len(max(devices, key=len)) - 20)
+        self.devices_cb.grid(row=1, column=0, sticky=N + S + E + W)
         self.devices_cb.current(0)
         master.grid_columnconfigure(0, weight=1)
         master.grid_rowconfigure(1, weight=1)
@@ -47,13 +51,17 @@ class DevicePicker(tkSimpleDialog.Dialog):
         self.result = value
 
 ###############################################################################
-# Taken from https://stackoverflow.com/questions/3781670/how-to-highlight-text-in-a-tkinter-text-widget
+# Taken from
+# https://stackoverflow.com/questions/3781670/how-to-highlight-text-in-a-tkinter-text-widget
+
+
 class SearchableText(Text):
     '''A searchable and highlightable Text widget
 
     The highlight_pattern method is a simplified python
     version of the tcl code at http://wiki.tcl.tk/3246
     '''
+
     def __init__(self, *args, **kwargs):
         Text.__init__(self, *args, **kwargs)
         self.tag_config("highlight", background="#ffff00")
@@ -70,7 +78,7 @@ class SearchableText(Text):
         for i in range(2, end):
             if i % 2 == 0:
                 self.tag_add('evenrow', "{}.0".format(i),
-                        "{}.0".format(i+1))
+                             "{}.0".format(i + 1))
 
     def highlight_pattern(self, pattern, start="1.0", end="end", regexp=False):
         '''Apply the given tag to all text that matches the given pattern
@@ -86,7 +94,7 @@ class SearchableText(Text):
         count = IntVar()
         while True:
             index = self.search(pattern, "matchEnd", "searchLimit",
-                    count=count, regexp=regexp)
+                                count=count, regexp=regexp)
             if index == "":
                 break
             self.mark_set("matchStart", index)
@@ -94,8 +102,10 @@ class SearchableText(Text):
             self.tag_add('highlight', "matchStart", "matchEnd")
 ###############################################################################
 
+
 class App(Frame):
     """The main application window"""
+
     def __init__(self, master):
         Frame.__init__(self, master)
         self.master = master
@@ -122,7 +132,7 @@ class App(Frame):
             # Disable everything when you have a queue
             # For now just quit
             master.quit()
-        #TODO: Improve device name selection
+        # TODO: Improve device name selection
         self.device = self.device_picker.result.split()[0]
         self.device_string.set("Device: {}".format(self.device))
         self.root_adb = seal.check_root_adb(self.device)
@@ -130,13 +140,13 @@ class App(Frame):
             print "WARNING: Adb can not run as root on the device."
             print "The information shown by the tool will be incomplete."
             tkMessageBox.showwarning("ADB is not root",
-                    "Adb can not run as root on the selected device.\n"
-                    "The information shown by the tool will be incomplete.")
+                                     "Adb can not run as root on the selected device.\n"
+                                     "The information shown by the tool will be incomplete.")
 
         self.androidver_string.set("Android version: {}".format(
-                seal.get_android_version(self.device)))
+            seal.get_android_version(self.device)))
         self.selinux_string.set("SELinux mode: {}".format(
-                seal.get_selinux_mode(self.device).lower()))
+            seal.get_selinux_mode(self.device).lower()))
         # Setup policy
         self.policy = seal.setup_policy(None, self.device)
         if self.policy is None:
@@ -147,11 +157,11 @@ class App(Frame):
         self.processes = seal.get_processes(self.device)
         max_pid_len = len(max(self.processes, key=len))
         self.processes_lb.config(width=max_pid_len + 2 + len(
-                max([i.name for i in self.processes.values()], key=len)))
+            max([i.name for i in self.processes.values()], key=len)))
         self.processes_lb.insert('end', "No filter".rjust(9 + max_pid_len))
         for i in sorted(self.processes.values(), key=lambda x: int(x.pid)):
             self.processes_lb.insert('end',
-                    "{} {}".format(i.pid.rjust(max_pid_len), i.name))
+                                     "{} {}".format(i.pid.rjust(max_pid_len), i.name))
         self.processes_lb.config(state=DISABLED)
         self.files_search_button.config(state=DISABLED)
         self.files_search_entry.config(state=DISABLED)
@@ -187,7 +197,7 @@ class App(Frame):
     def filter_files(self, process):
         """Filter files by process in a background thread"""
         self.filter_thread = threading.Thread(
-                target=self.filter_files_bg, args=[process])
+            target=self.filter_files_bg, args=[process])
         self.filter_thread.start()
         self.after(200, self.filter_callback)
 
@@ -214,13 +224,13 @@ class App(Frame):
         """Show a contextual menu with dynamic actions"""
         if menu is self.files_rmenu:
             self.files_rmenu.entryconfigure("Find processes",
-                    command=lambda event=event: self.files_show_processes(event))
+                                            command=lambda event=event: self.files_show_processes(event))
             self.files_rmenu.entryconfigure("Copy", state=DISABLED)
             if self.files_text.tag_ranges("sel"):
                 self.files_rmenu.entryconfigure("Copy", state=NORMAL)
         if menu is self.processes_rmenu:
             self.processes_rmenu.entryconfigure("Find files",
-                    command=lambda event=event: self.processes_show_files(event))
+                                                command=lambda event=event: self.processes_show_files(event))
             self.processes_rmenu.entryconfigure("Copy", state=DISABLED)
             if self.processes_text.tag_ranges("sel"):
                 self.processes_rmenu.entryconfigure("Copy", state=NORMAL)
@@ -233,7 +243,7 @@ class App(Frame):
         index = event.widget.index("@%s,%s" % (event.x, event.y))
         line = index.split(".")[0]
         filename = self.files_text.get(
-                "{}.0".format(line), "{}.0-1c".format(int(line)+1))
+            "{}.0".format(line), "{}.0-1c".format(int(line) + 1))
         if filename in self.files:
             self.tabs.select(self.processes_tab)
             self.processes_filterbyfile_entry.delete(0, END)
@@ -242,7 +252,7 @@ class App(Frame):
 
     def view_files(self, files, permissions=None):
         """Display the textview with the file list"""
-        self.files_search_entry.delete(0, END) # Delete the search parameter
+        self.files_search_entry.delete(0, END)  # Delete the search parameter
         self.files_text.config(state=NORMAL)
         self.files_text.delete(1.0, END)
         self.files_current_files = []
@@ -254,7 +264,7 @@ class App(Frame):
         self.files_text.highlight_odd_lines()
         self.files_text.config(state=DISABLED)
         self.filteringby_string.set("{} {}".format(
-                len(self.files_current_files), self.filteringby_string.get()))
+            len(self.files_current_files), self.filteringby_string.get()))
 
     def view_process_details(self, event):
         """When clicking on a process in the processes tab,
@@ -270,20 +280,28 @@ class App(Frame):
         # Close the menu
         self.files_rmenu.unpost()
         filename = self.files_text.get(
-                "{}.0".format(line), "{}.0-1c".format(int(line)+1))
+            "{}.0".format(line), "{}.0-1c".format(int(line) + 1))
         if filename in self.files:
             f = self.files[filename]
             self.files_details_text.config(state=NORMAL)
             self.files_details_text.delete(1.0, END)
-            self.files_details_text.insert(END, 'Details about "{}":\n'.format(f.absname))
-            self.files_details_text.insert(END, "UNIX permissions: {}\n".format(f.dac))
-            self.files_details_text.insert(END, "User: {}\nGroup: {}\n".format(f.user, f.group))
+            self.files_details_text.insert(
+                END, 'Details about "{}":\n'.format(f.absname))
+            self.files_details_text.insert(
+                END, "UNIX permissions: {}\n".format(f.dac))
+            self.files_details_text.insert(
+                END, "User: {}\nGroup: {}\n".format(f.user, f.group))
             self.files_details_text.insert(END, "\nSELinux information:\n")
-            self.files_details_text.insert(END, "File type: {}\n".format(f.security_class))
-            self.files_details_text.insert(END, "SELinux user: {}\n".format(f.context.user))
-            self.files_details_text.insert(END, "SELinux role: {}\n".format(f.context.role))
-            self.files_details_text.insert(END, "SELinux type: {}\n".format(f.context.type))
-            self.files_details_text.insert(END, "SELinux sensitivity: {}\n".format(f.context.sens))
+            self.files_details_text.insert(
+                END, "File type: {}\n".format(f.security_class))
+            self.files_details_text.insert(
+                END, "SELinux user: {}\n".format(f.context.user))
+            self.files_details_text.insert(
+                END, "SELinux role: {}\n".format(f.context.role))
+            self.files_details_text.insert(
+                END, "SELinux type: {}\n".format(f.context.type))
+            self.files_details_text.insert(
+                END, "SELinux sensitivity: {}\n".format(f.context.sens))
             if f in self.file_permissions:
                 self.files_details_text.insert(END, 'Permissions on "{}" by "{}":'.format(
                     f.absname, self.current_filter_process.name))
@@ -306,9 +324,9 @@ class App(Frame):
             process = self.processes[value.split()[0].strip()]
             print "Filtering by process: {}".format(value)
             self.filteringby_string.set(
-                    'files accessible by process "{}"'.format(process.name))
+                'files accessible by process "{}"'.format(process.name))
             self.processcontext_string.set(
-                    'running in SELinux domain "{}" (context: "{}")'.format(
+                'running in SELinux domain "{}" (context: "{}")'.format(
                     process.context.type, process.context))
         self.current_filter_process = process
         self.filter_files(process)
@@ -319,7 +337,7 @@ class App(Frame):
         index = event.widget.index("@%s,%s" % (event.x, event.y))
         line = index.split(".")[0]
         l = self.processes_text.get(
-                "{}.0".format(line), "{}.0-1c".format(int(line)+1))
+            "{}.0".format(line), "{}.0-1c".format(int(line) + 1))
         pid = l.split()[0]
         if pid in self.processes:
             self.tabs.select(self.file_tab)
@@ -333,13 +351,13 @@ class App(Frame):
     def file_search(self, event=None):
         """Search for a string in the file list"""
         s = self.files_search_entry.get()
-        if s: # Search pattern
+        if s:  # Search pattern
             fl = []
             for f in self.files_current_files:
                 if s in f.absname:
                     fl.append(f)
             self.searchresno_string.set("{} files matching".format(len(fl)))
-        else: # Clear search
+        else:  # Clear search
             fl = self.files_current_files
             self.searchresno_string.set("")
 
@@ -358,13 +376,13 @@ class App(Frame):
         """Show an active progressbar in the status bar, with automatic width"""
         self.update_idletasks()
         l = (self.status_bar.winfo_width() -
-            self.device_label.winfo_width() -
-            self.selinux_label.winfo_width() -
-            self.androidver_label.winfo_width() -
-            self.policy_label.winfo_width() -
-            self.fileno_label.winfo_width() -
-            self.procno_label.winfo_width() -
-            15)
+             self.device_label.winfo_width() -
+             self.selinux_label.winfo_width() -
+             self.androidver_label.winfo_width() -
+             self.policy_label.winfo_width() -
+             self.fileno_label.winfo_width() -
+             self.procno_label.winfo_width() -
+             15)
         self.progressbar.config(length=l)
         if self.first_progressbar:
             self.progressbar.grid(row=0, column=11, sticky=E)
@@ -383,7 +401,7 @@ class App(Frame):
         Given a path, list all processes that can access any
         item in that subtree"""
         filename = self.processes_filterbyfile_entry.get()
-        if filename and filename in self.files: # Filter by file
+        if filename and filename in self.files:  # Filter by file
             f = self.files[filename]
             files = {}
             if f.is_directory():
@@ -401,22 +419,23 @@ class App(Frame):
             for f2 in sorted(self.allowed_processes_by_file.keys()):
                 p2 = self.allowed_processes_by_file[f2]
                 self.processes_text.insert(END,
-                        'The {} "{}" in the context "{}" can be accessed by {} processes:'.format(
-                        f2.security_class, f2, f2.context, len(p2)))
+                                           'The {} "{}" in the context "{}" can be accessed by {} processes:'.format(
+                                               f2.security_class, f2, f2.context, len(p2)))
                 max_pid_len = max([len(str(x.pid)) for x in p2])
                 for p in sorted(p2):
                     self.processes_text.insert(END, '\n{} {}'.format(
-                            p.pid.rjust(max_pid_len+2), p.name))
+                        p.pid.rjust(max_pid_len + 2), p.name))
                 self.processes_text.insert(END, '\n')
             self.processes_text.highlight_odd_lines()
             self.processes_text.config(state=DISABLED)
-        elif not filename: # Clear filter
+        elif not filename:  # Clear filter
             self.processes_text.config(state=NORMAL)
             self.processes_text.delete('1.0', END)
-            max_pid_len = max([len(str(x.pid)) for x in self.processes.values()])
+            max_pid_len = max([len(str(x.pid))
+                               for x in self.processes.values()])
             for p in sorted(self.processes.values()):
                 self.processes_text.insert(END,
-                        '{} {}\n'.format(p.pid.rjust(max_pid_len+2), p.name))
+                                           '{} {}\n'.format(p.pid.rjust(max_pid_len + 2), p.name))
             self.processes_text.highlight_odd_lines()
             self.processes_text.config(state=DISABLED)
 
@@ -429,96 +448,96 @@ class App(Frame):
         self.file_tab = Frame(self.tabs)
         # Left part
         self.processes_frame = LabelFrame(self.file_tab,
-                padding=(5, 5, 5, 5), text="Processes")
+                                          padding=(5, 5, 5, 5), text="Processes")
         Label(self.processes_frame, text="Double click a process",
-                padding=(5, 5, 5, 5)).grid(row=0, sticky=W)
+              padding=(5, 5, 5, 5)).grid(row=0, sticky=W)
         scrollbar = Scrollbar(self.processes_frame, orient='vertical')
         self.processes_lb = Listbox(self.processes_frame,
-                yscrollcommand=scrollbar.set,
-                selectmode='single',
-                font='TkFixedFont',
-                exportselection=0)
+                                    yscrollcommand=scrollbar.set,
+                                    selectmode='single',
+                                    font='TkFixedFont',
+                                    exportselection=0)
         self.processes_lb.bind("<Double-Button-1>", self.filter_proc)
         self.processes_lb.bind("<Return>", self.filter_proc)
         scrollbar.config(command=self.processes_lb.yview)
         # Status bar
         self.status_bar = Frame(master)
         self.device_label = Label(self.status_bar,
-                textvariable=self.device_string,
-                relief='sunken', anchor='w')
+                                  textvariable=self.device_string,
+                                  relief='sunken', anchor='w')
         self.androidver_label = Label(self.status_bar,
-                textvariable=self.androidver_string,
-                relief='sunken', anchor='w')
+                                      textvariable=self.androidver_string,
+                                      relief='sunken', anchor='w')
         self.policy_label = Label(self.status_bar,
-                textvariable=self.policy_string,
-                relief='sunken', anchor='w')
+                                  textvariable=self.policy_string,
+                                  relief='sunken', anchor='w')
         self.selinux_label = Label(self.status_bar,
-                textvariable=self.selinux_string,
-                relief='sunken', anchor='w')
+                                   textvariable=self.selinux_string,
+                                   relief='sunken', anchor='w')
         self.fileno_label = Label(self.status_bar,
-                textvariable=self.fileno_string,
-                relief='sunken', anchor='w')
+                                  textvariable=self.fileno_string,
+                                  relief='sunken', anchor='w')
         self.procno_label = Label(self.status_bar,
-                textvariable=self.procno_string,
-                relief='sunken', anchor='w')
+                                  textvariable=self.procno_string,
+                                  relief='sunken', anchor='w')
         self.progressbar = Progressbar(self.status_bar,
-                orient="horizontal", mode="indeterminate")
+                                       orient="horizontal", mode="indeterminate")
         # Right part
         self.files_frame = LabelFrame(self.file_tab,
-                padding=(5, 5, 5, 5), text="Files")
-        ## Info bar
+                                      padding=(5, 5, 5, 5), text="Files")
+        # Info bar
         self.files_infobar = Frame(self.files_frame)
         Label(self.files_infobar, textvariable=self.filteringby_string,
-                padding=(0, 0, 5, 0)).grid(row=0, column=0, sticky=W)
+              padding=(0, 0, 5, 0)).grid(row=0, column=0, sticky=W)
         Label(self.files_infobar, textvariable=self.processcontext_string,
-                padding=(0, 0, 5, 0)).grid(row=0, column=1, sticky=W)
-        ## Search bar
+              padding=(0, 0, 5, 0)).grid(row=0, column=1, sticky=W)
+        # Search bar
         self.files_searchbar = Frame(self.files_frame)
         Label(self.files_searchbar, textvariable=self.searchresno_string
-                ).grid(row=0, column=0, sticky=W)
+              ).grid(row=0, column=0, sticky=W)
         self.files_search_button = Button(self.files_searchbar,
-                text="Search", command=self.file_search)
+                                          text="Search", command=self.file_search)
         self.files_search_entry = Entry(self.files_searchbar)
         self.files_search_entry.bind('<Return>', self.file_search)
         self.files_search_entry_rmenu = Menu(tearoff=0)
         self.files_search_entry_rmenu.add_command(label="Cut",
-                command=lambda: self.files_search_entry.event_generate("<<Cut>>"))
+                                                  command=lambda: self.files_search_entry.event_generate("<<Cut>>"))
         self.files_search_entry_rmenu.add_command(label="Copy",
-                command=lambda: self.files_search_entry.event_generate("<<Copy>>"))
+                                                  command=lambda: self.files_search_entry.event_generate("<<Copy>>"))
         self.files_search_entry_rmenu.add_command(label="Paste",
-                command=lambda: self.files_search_entry.event_generate("<<Paste>>"))
+                                                  command=lambda: self.files_search_entry.event_generate("<<Paste>>"))
         self.files_search_entry.bind("<3>",
-                lambda event: self.show_menu(event, self.files_search_entry_rmenu))
+                                     lambda event: self.show_menu(event, self.files_search_entry_rmenu))
         self.files_search_entry_rmenu.bind("<FocusOut>", self.menu_lost_focus)
         self.files_search_entry_rmenu.bind("<Escape>", self.menu_lost_focus)
-        ## Files text
+        # Files text
         files_scrollv = Scrollbar(self.files_frame, orient='vertical')
         files_scrollh = Scrollbar(self.files_frame, orient='horizontal')
         self.files_text = SearchableText(self.files_frame,
-                wrap=NONE,
-                yscrollcommand=files_scrollv.set,
-                xscrollcommand=files_scrollh.set,
-                font='TkFixedFont')
+                                         wrap=NONE,
+                                         yscrollcommand=files_scrollv.set,
+                                         xscrollcommand=files_scrollh.set,
+                                         font='TkFixedFont')
         self.files_text.bind("<1>", self.view_file_details)
         files_scrollv.config(command=self.files_text.yview)
         files_scrollh.config(command=self.files_text.xview)
-        ### Files right click menu
+        # Files right click menu
         self.files_rmenu = Menu(tearoff=0)
         self.files_rmenu.add_command(label="Copy",
-                command=lambda: self.files_text.event_generate("<<Copy>>"))
+                                     command=lambda: self.files_text.event_generate("<<Copy>>"))
         self.files_rmenu.add_command(label="Find processes")
         self.files_text.bind("<3>",
-                lambda event: self.show_menu(event, self.files_rmenu))
+                             lambda event: self.show_menu(event, self.files_rmenu))
         self.files_rmenu.bind("<FocusOut>", self.menu_lost_focus)
         self.files_rmenu.bind("<Escape>", self.menu_lost_focus)
-        ## File detail text
+        # File detail text
         details_scrollv = Scrollbar(self.files_frame, orient='vertical')
         details_scrollh = Scrollbar(self.files_frame, orient='horizontal')
         self.files_details_text = SearchableText(self.files_frame,
-                wrap=NONE,
-                yscrollcommand=details_scrollv.set,
-                xscrollcommand=details_scrollh.set,
-                font='TkFixedFont')
+                                                 wrap=NONE,
+                                                 yscrollcommand=details_scrollv.set,
+                                                 xscrollcommand=details_scrollh.set,
+                                                 font='TkFixedFont')
         details_scrollv.config(command=self.files_details_text.yview)
         details_scrollh.config(command=self.files_details_text.xview)
 
@@ -527,41 +546,45 @@ class App(Frame):
         self.file_tab.grid_rowconfigure(1, weight=1)
         # Left part
         self.processes_frame.grid_rowconfigure(1, weight=1)
-        self.processes_frame.grid(row=1, column=0, sticky=N+S+W+E, padx=5, pady=5)
-        self.processes_lb.grid(row=1, column=0, sticky=N+S+W+E)
-        scrollbar.grid(row=1, column=1, sticky=N+S)
+        self.processes_frame.grid(
+            row=1, column=0, sticky=N + S + W + E, padx=5, pady=5)
+        self.processes_lb.grid(row=1, column=0, sticky=N + S + W + E)
+        scrollbar.grid(row=1, column=1, sticky=N + S)
         # Right part
-        self.files_frame.grid(row=1, column=1, sticky=N+S+W+E, padx=5, pady=5)
+        self.files_frame.grid(row=1, column=1, sticky=N +
+                              S + W + E, padx=5, pady=5)
         self.file_tab.grid_columnconfigure(1, weight=1)
         self.files_frame.grid_rowconfigure(2, weight=1)
-        ## Info bar
-        self.files_infobar.grid(row=0, column=0, columnspan=4, sticky=N+S+W+E)
-        ## Search bar
-        self.files_searchbar.grid(row=1, column=0, columnspan=4, sticky=N+S+W+E)
+        # Info bar
+        self.files_infobar.grid(
+            row=0, column=0, columnspan=4, sticky=N + S + W + E)
+        # Search bar
+        self.files_searchbar.grid(
+            row=1, column=0, columnspan=4, sticky=N + S + W + E)
         self.files_searchbar.grid_columnconfigure(1, weight=1)
-        self.files_search_entry.grid(row=0, column=1, sticky=N+S+W+E)
-        self.files_search_button.grid(row=0, column=2, sticky=N+S+E)
-        ## Files Text
-        self.files_text.grid(row=2, column=0, sticky=N+S+W+E)
+        self.files_search_entry.grid(row=0, column=1, sticky=N + S + W + E)
+        self.files_search_button.grid(row=0, column=2, sticky=N + S + E)
+        # Files Text
+        self.files_text.grid(row=2, column=0, sticky=N + S + W + E)
         self.files_frame.grid_columnconfigure(0, weight=2)
-        files_scrollv.grid(row=2, column=1, sticky=N+S)
-        files_scrollh.grid(row=3, column=0, sticky=E+W)
-        ## Files details Text
-        self.files_details_text.grid(row=2, column=2, sticky=N+S+W+E)
+        files_scrollv.grid(row=2, column=1, sticky=N + S)
+        files_scrollh.grid(row=3, column=0, sticky=E + W)
+        # Files details Text
+        self.files_details_text.grid(row=2, column=2, sticky=N + S + W + E)
         self.files_frame.grid_columnconfigure(2, weight=1)
-        details_scrollv.grid(row=2, column=3, sticky=N+S)
-        details_scrollh.grid(row=3, column=2, sticky=E+W)
+        details_scrollv.grid(row=2, column=3, sticky=N + S)
+        details_scrollh.grid(row=3, column=2, sticky=E + W)
         # Status bar
         self.device_label.grid(row=0, column=0, sticky=W)
-        Separator(self.status_bar).grid(row=0, column=1, sticky=N+S)
+        Separator(self.status_bar).grid(row=0, column=1, sticky=N + S)
         self.androidver_label.grid(row=0, column=2, sticky=W)
-        Separator(self.status_bar).grid(row=0, column=3, sticky=N+S)
+        Separator(self.status_bar).grid(row=0, column=3, sticky=N + S)
         self.selinux_label.grid(row=0, column=4, sticky=W)
-        Separator(self.status_bar).grid(row=0, column=5, sticky=N+S)
+        Separator(self.status_bar).grid(row=0, column=5, sticky=N + S)
         self.policy_label.grid(row=0, column=6, sticky=W)
-        Separator(self.status_bar).grid(row=0, column=7, sticky=N+S)
+        Separator(self.status_bar).grid(row=0, column=7, sticky=N + S)
         self.procno_label.grid(row=0, column=8, sticky=W)
-        Separator(self.status_bar).grid(row=0, column=9, sticky=N+S)
+        Separator(self.status_bar).grid(row=0, column=9, sticky=N + S)
         self.fileno_label.grid(row=0, column=10, sticky=W)
 
         self.tabs.add(self.file_tab, text="Files")
@@ -572,64 +595,68 @@ class App(Frame):
         # Search bar
         self.processes_file_searchbar = Frame(self.processes_tab)
         Label(self.processes_file_searchbar, text="Filter processes by file",
-                padding=(5, 5, 5, 5)).grid(row=0, column=0, sticky=W)
+              padding=(5, 5, 5, 5)).grid(row=0, column=0, sticky=W)
         self.processes_filterbyfile_button = Button(self.processes_file_searchbar,
-                text="Filter", command=self.processes_filter_by_file)
-        self.processes_filterbyfile_entry = Entry(self.processes_file_searchbar)
+                                                    text="Filter", command=self.processes_filter_by_file)
+        self.processes_filterbyfile_entry = Entry(
+            self.processes_file_searchbar)
         self.processes_filterbyfile_entry.bind('<Return>',
-                self.processes_filter_by_file)
+                                               self.processes_filter_by_file)
         self.processes_filterbyfile_entry_rmenu = Menu(tearoff=0)
         self.processes_filterbyfile_entry_rmenu.add_command(label="Cut",
-                command=lambda: self.processes_filterbyfile_entry.event_generate("<<Cut>>"))
+                                                            command=lambda: self.processes_filterbyfile_entry.event_generate("<<Cut>>"))
         self.processes_filterbyfile_entry_rmenu.add_command(label="Copy",
-                command=lambda: self.processes_filterbyfile_entry.event_generate("<<Copy>>"))
+                                                            command=lambda: self.processes_filterbyfile_entry.event_generate("<<Copy>>"))
         self.processes_filterbyfile_entry_rmenu.add_command(label="Paste",
-                command=lambda: self.processes_filterbyfile_entry.event_generate("<<Paste>>"))
+                                                            command=lambda: self.processes_filterbyfile_entry.event_generate("<<Paste>>"))
         self.processes_filterbyfile_entry.bind("<3>", lambda event:
-                self.show_menu(event, self.processes_filterbyfile_entry_rmenu))
+                                               self.show_menu(event, self.processes_filterbyfile_entry_rmenu))
         self.processes_filterbyfile_entry_rmenu.bind("<FocusOut>",
-                self.menu_lost_focus)
+                                                     self.menu_lost_focus)
         self.processes_filterbyfile_entry_rmenu.bind("<Escape>",
-                self.menu_lost_focus)
+                                                     self.menu_lost_focus)
         # Processes text
         self.processes_text_frame = Frame(self.processes_tab)
         processes_scrollv = Scrollbar(self.processes_text_frame,
-                orient='vertical')
+                                      orient='vertical')
         processes_scrollh = Scrollbar(self.processes_text_frame,
-                orient='horizontal')
+                                      orient='horizontal')
         self.processes_text = SearchableText(self.processes_text_frame,
-                wrap=NONE,
-                yscrollcommand=processes_scrollv.set,
-                xscrollcommand=processes_scrollh.set,
-                font='TkFixedFont')
+                                             wrap=NONE,
+                                             yscrollcommand=processes_scrollv.set,
+                                             xscrollcommand=processes_scrollh.set,
+                                             font='TkFixedFont')
         self.processes_text.bind("<1>", self.view_process_details)
         processes_scrollv.config(command=self.processes_text.yview)
         processes_scrollh.config(command=self.processes_text.xview)
-        ## Processes right click menu
+        # Processes right click menu
         self.processes_rmenu = Menu(tearoff=0)
         self.processes_rmenu.add_command(label="Copy", command=lambda:
-                self.processes_text.event_generate("<<Copy>>"))
+                                         self.processes_text.event_generate("<<Copy>>"))
         self.processes_rmenu.add_command(label="Find files")
         self.processes_text.bind("<3>",
-                lambda event: self.show_menu(event, self.processes_rmenu))
+                                 lambda event: self.show_menu(event, self.processes_rmenu))
         self.processes_rmenu.bind("<FocusOut>", self.menu_lost_focus)
         self.processes_rmenu.bind("<Escape>", self.menu_lost_focus)
         # Grid c:wonfiguration
         # Global
         self.processes_tab.grid_rowconfigure(1, weight=1)
         self.processes_tab.grid_columnconfigure(0, weight=1)
-        self.processes_file_searchbar.grid(row=0, column=0, sticky=N+S+W+E)
-        self.processes_text_frame.grid(row=1, column=0, sticky=N+S+W+E)
+        self.processes_file_searchbar.grid(
+            row=0, column=0, sticky=N + S + W + E)
+        self.processes_text_frame.grid(row=1, column=0, sticky=N + S + W + E)
         # Processes file searchbar
         self.processes_file_searchbar.grid_columnconfigure(1, weight=1)
-        self.processes_filterbyfile_entry.grid(row=0, column=1, sticky=N+S+W+E)
-        self.processes_filterbyfile_button.grid(row=0, column=2, sticky=N+S+W+E)
+        self.processes_filterbyfile_entry.grid(
+            row=0, column=1, sticky=N + S + W + E)
+        self.processes_filterbyfile_button.grid(
+            row=0, column=2, sticky=N + S + W + E)
         # Processes text frame
         self.processes_text_frame.grid_columnconfigure(0, weight=1)
         self.processes_text_frame.grid_rowconfigure(0, weight=1)
-        self.processes_text.grid(row=0, column=0, sticky=N+S+W+E)
-        processes_scrollv.grid(row=0, column=1, sticky=N+S)
-        processes_scrollh.grid(row=1, column=0, sticky=E+W)
+        self.processes_text.grid(row=0, column=0, sticky=N + S + W + E)
+        processes_scrollv.grid(row=0, column=1, sticky=N + S)
+        processes_scrollh.grid(row=1, column=0, sticky=E + W)
 
         self.tabs.add(self.processes_tab, text="Processes")
         #######################################################################
@@ -637,6 +664,7 @@ class App(Frame):
         #######
         self.tabs.pack(expand=1, fill='both')
         self.status_bar.pack(fill='x')
+
 
 def main():
     """The main function"""
