@@ -339,14 +339,15 @@ def device_picker():
     return devices[int(choice)].split()[0]
 
 
-def setup_policy(sepolicy, device):
+def setup_policy(device, sepolicy=None):
     """Return a policy object, initialised from either a policy file or
     a connected Android device"""
     if sepolicy is None:
-        if device is None:
-            return None
-
         # Get policy from device
+        if device is None:
+            # We have no device and no policy, abort
+            # TODO: raise exception
+            return None
         tmp_dir = tempfile.mkdtemp()
         policy_file = "/sys/fs/selinux/policy"
         sepolicy = os.path.join(tmp_dir, "sepolicy")
@@ -358,6 +359,7 @@ def setup_policy(sepolicy, device):
             sys.exit(1)
         print 'Parsing policy "{}" from device...'.format(policy_file)
     else:
+        # Use supplied policy from file
         print 'Parsing policy "{}"...'.format(sepolicy)
 
     p = Policy(sepolicy)
@@ -370,7 +372,7 @@ def polinfo(args):
         if not initialise_device(args):
             sys.exit(1)
 
-    p = setup_policy(args.policy, args.device)
+    p = setup_policy(args.device, args.sepolicy)
     if p is None:
         print "You need to provide either a policy or a running Android device"
         sys.exit(1)
@@ -529,7 +531,7 @@ def files(args):
             None, None, files_dict)
         print_files(args, None, accessible_files, file_permissions)
     else:
-        p = setup_policy(None, args.device)
+        p = setup_policy(args.device)
         if p is None:
             print "You need to provide either a policy or a running Android device"
             sys.exit(1)
@@ -669,7 +671,7 @@ def processes(args):
         print_processes(args, None, allowed_processes_by_file,
                         process_permissions_by_file)
     else:
-        p = setup_policy(None, args.device)
+        p = setup_policy(args.device)
         if p is None:
             print "You need to provide either a policy or a running Android device"
             sys.exit(1)
