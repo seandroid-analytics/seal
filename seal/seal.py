@@ -339,41 +339,16 @@ def device_picker():
     return devices[int(choice)].split()[0]
 
 
-def setup_policy(device, sepolicy=None):
-    """Return a policy object, initialised from either a policy file or
-    a connected Android device"""
-    if sepolicy is None:
-        # Get policy from device
-        if device is None:
-            # We have no device and no policy, abort
-            # TODO: raise exception
-            return None
-        tmp_dir = tempfile.mkdtemp()
-        policy_file = "/sys/fs/selinux/policy"
-        sepolicy = os.path.join(tmp_dir, "sepolicy")
-        # TODO remove the directory once we're done with the policy
-        try:
-            check_call([adb, "-s", device, "pull", policy_file, sepolicy])
-        except CalledProcessError:
-            print "Failed to get the policy from the selected device"
-            sys.exit(1)
-        print 'Parsing policy "{}" from device...'.format(policy_file)
-    else:
-        # Use supplied policy from file
-        print 'Parsing policy "{}"...'.format(sepolicy)
-
-    p = Policy(sepolicy)
-    return p
-
-
 def polinfo(args):
     """Print policy information"""
     if args.policy is None:
         if not initialise_device(args):
+            # TODO: add logging
             sys.exit(1)
 
-    p = setup_policy(args.device, args.sepolicy)
+    p = Policy(args.device, args.sepolicy)
     if p is None:
+        # TODO: add logging
         print "You need to provide either a policy or a running Android device"
         sys.exit(1)
 
@@ -531,7 +506,7 @@ def files(args):
             None, None, files_dict)
         print_files(args, None, accessible_files, file_permissions)
     else:
-        p = setup_policy(args.device)
+        p = Policy(args.device)
         if p is None:
             print "You need to provide either a policy or a running Android device"
             sys.exit(1)
@@ -671,7 +646,7 @@ def processes(args):
         print_processes(args, None, allowed_processes_by_file,
                         process_permissions_by_file)
     else:
-        p = setup_policy(args.device)
+        p = Policy(args.device)
         if p is None:
             print "You need to provide either a policy or a running Android device"
             sys.exit(1)

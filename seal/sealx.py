@@ -148,7 +148,7 @@ class App(Frame):
         self.selinux_string.set("SELinux mode: {}".format(
             seal.get_selinux_mode(self.device).lower()))
         # Setup policy
-        self.policy = seal.setup_policy(self.device)
+        self.policy = seal.Policy(self.device)
         if self.policy is None:
             tkMessageBox.showerror("Fatal error" "Failed to initialise policy")
             self.quit()

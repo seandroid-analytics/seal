@@ -124,19 +124,61 @@ class AVRule(object):
 
 class Policy(object):
     """Class providing an abstraction for the SELinux policy"""
+    DEFAULT_POLICY_FILE = "/sys/fs/selinux/policy"
 
-    def __init__(self, filename):
-        if filename is None or not filename:
-            raise IOError('Invalid policy file')
-
-        self.name = filename
+    def __init__(self, device, sepolicy=None):
+        """Return a policy object, initialised from either a policy file or
+        a connected Android device"""
+        # TODO: setup logging
+        if sepolicy is None:
+            # Get policy from device
+            if device is None:
+                # We have no device and no policy, abort
+                raise RuntimeError('Invalid policy file')
+            self._tmpdir = tempfile.mkdtemp()
+            self._sepolicy_file = os.path.join(self._tmpdir, "sepolicy")
+            try:
+                check_call([adb, "-s", device, "pull",
+                            self.DEFAULT_POLICY_FILE, self._sepolicy_file])
+            except CalledProcessError:
+                # TODO: add logging
+                print "Failed to get the policy from the selected device"
+                raise
+            # TODO: add logging
+            print 'Parsing policy "{}" from device...'.format(self.DEFAULT_POLICY_FILE)
+        else:
+            # Use supplied policy from file
+            # TODO: add logging
+            print 'Parsing policy "{}"...'.format(self.DEFAULT_POLICY_FILE)
+        # TODO change to v4
+        self.name = sepolicy
         self._policy_path = apol.apol_policy_path_t(
             apol.APOL_POLICY_PATH_TYPE_MONOLITHIC, filename, None)
         self._policy = apol.apol_policy_t(self._policy_path)
 
         if self._policy.this is None:
-            raise IOError('Invalid policy file')
+            raise RuntimeError('Invalid policy file')
         self._qpolicy = self._policy.get_qpol()
+
+    def __del__(self):
+        if self._sepolicy_file:
+            try:
+                os.remove(self._sepolicy_file)
+            except OSError:
+                self.log.warning("Trying to remove policy.conf file \"%s\"... "
+                               "failed!", self._sepolicy_file)
+            else:
+                self.log.debug("Trying to remove policy.conf file \"%s\"... "
+                               "done!", self._sepolicy_file)
+        if self._tmpdir:
+            try:
+                os.rmdir(self._tmpdir)
+            except OSError:
+                self.log.warning("Trying to remove the temporary directory "
+                                 "\"%s\"... failed!", self._tmpdir)
+            else:
+                self.log.debug("Trying to remove the temporary directory "
+                               "\"%s\"... done!", self._tmpdir)
 
     @property
     def types(self):
