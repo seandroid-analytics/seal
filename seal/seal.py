@@ -29,20 +29,19 @@ import sys
 import re
 import shlex
 
-adb = "adb"
 processes_on_device_no = 0
 files_on_device_no = 0
 
 
 class FileOnDevice(object):
     """Class providing an abstraction for a file on the device"""
-    file_class_converter = {'-': 'file',        'file':         '-',  # File
-                            'd': 'dir',         'dir':          'd',  # Directory
-                            'c': 'chr_file',    'chr_file':     'c',  # Character device
-                            'l': 'lnk_file',    'lnk_file':     'l',  # Symlink
-                            'p': 'fifo_file',   'fifo_file':    'p',  # Named pipe
-                            's': 'sock_file',   'sock_file':    's',  # Socket
-                            'b': 'blk_file',    'blk_file':     'b'}  # Block device
+    file_class_converter = {'-': 'file',      'file':      '-',  # File
+                            'd': 'dir',       'dir':       'd',  # Directory
+                            'c': 'chr_file',  'chr_file':  'c',  # Character device
+                            'l': 'lnk_file',  'lnk_file':  'l',  # Symlink
+                            'p': 'fifo_file', 'fifo_file': 'p',  # Named pipe
+                            's': 'sock_file', 'sock_file': 's',  # Socket
+                            'b': 'blk_file',  'blk_file':  'b'}  # Block device
 
     correct_line = (
         '[-dclpsb][-rwxst]{9}\\s+[^\\s]+\\s+[^\\s]+\\s+[^\\s:]+:[^\\s:]+:[^\\s:]+:[^\\s:]+\\s+.*')
@@ -255,6 +254,7 @@ class ProcessOnDevice(object):
 
 def get_adb_call(device, root_adb, command):
     """Return a list representing the adb command to run the command string"""
+    # TODO: merge in appropriate Device-class methods
     call = [adb, "-s", device, "shell"]
     if root_adb == "root_adb":
         # Root adb-specific things
@@ -269,62 +269,10 @@ def get_adb_call(device, root_adb, command):
     return call
 
 
-def check_root_adb(device):
-    """Check what level of root we can get on the device.
-    This function cannot use get_adb_call, as that requires
-    this function to be run first."""
-    # Initially assume we are not root
-    root_adb = "not_root"
-    # Check for increasingly high privilege levels
-    # Check wether 'su' exists
-    root_status = check_output(
-        [adb, "-s", device, "shell", "command", "-v", "su"]).strip('\r\n')
-    # If su exists, check if we can be root
-    if root_status:
-        root_status = check_output(
-            [adb, "-s", device, "shell", "su", "-c", "id"]).strip('\r\n')
-        if "uid=0(root) gid=0(root)" in root_status:
-            # We have a root shell
-            root_adb = "root_shell"
-    # Try running adb as root
-    root_status = check_output([adb, "-s", device, "root"]).strip('\r\n')
-    if (root_status == "adbd is already running as root" or
-            root_status == "restarting adbd as root"):
-        # We have root
-        root_adb = "root_adb"
-    # Return our level of root
-    return root_adb
-
-
-def check_adb():
-    """Start adb if not started already"""
-    try:
-        with open(os.devnull, "w") as devnull:
-            check_call(["pgrep", "adb"], stdout=devnull)
-    except CalledProcessError:  # adb is not running
-        try:
-            check_call([adb, "devices"])
-        except CalledProcessError:
-            print 'Could not start adb.'
-            return False
-    return True
-
-
-def get_devices():
-    """Select one of the devices connected through adb"""
-    # Split by newline and remove first line ("List of devices attached")
-    devices = check_output([adb, "devices", "-l"]).split('\n')[1:]
-    devices = [x for x in devices if x]  # Remove empty strings
-    return devices
-
-
-def device_picker():
+def device_picker(devices):
     """Select one of the devices"""
-    devices = get_devices()
     if not devices:
-        # No devices connected
-        print "No devices connected."
-        return None
+        raise RuntimeError("No devices connected.")
     choice = 0
     if len(devices) > 1:
         # Ask user which device
@@ -341,26 +289,46 @@ def device_picker():
 
 def polinfo(args):
     """Print policy information"""
-    if args.policy is None:
-        if not initialise_device(args):
-            # TODO: add logging
-            sys.exit(1)
-
-    p = Policy(args.device, args.sepolicy)
-    if p is None:
-        # TODO: add logging
-        print "You need to provide either a policy or a running Android device"
-        sys.exit(1)
-
+    # Begin initialisation
+    # TODO: add logging
+    p = None
+    if not args.policy:
+        # If we have no policy, use a device
+        if not args.device:
+            # Use the provided custom adb, if any
+            if args.adb:
+                devices = Device.get_devices(args.adb)
+            else:
+                devices = Device.get_devices()
+            args.device = device_picker(devices)
+        try:
+            # Use the provided custom adb, if any
+            if args.adb:
+                device = Device(args.device, args.adb)
+            else:
+                device = Device(args.device)
+        except ValueError as e:
+            self.log.error(e)
+            self.log.error("Could not create device, aborting...")
+            raise RuntimeError
+        p = Policy(device)
+    else:
+        # Use the provided policy
+        p = Policy(None, args.policy)
+    if not p:
+        self.log.error("You need to provide either a valid policy "
+                       "or a running Android device.")
+        raise RuntimeError
+    # End initialisation
     print "Device {} is running Android {} with SELinux in {} mode.".format(
-        args.device, get_android_version(args.device),
-        get_selinux_mode(args.device).lower())
+        device, device.android_version, device.selinux_mode)
 
     if args.info_domains:
         print "The policy contains {} domains:".format(len(p.domains))
         for d in p.domains:
             print d
     else:
+        # TODO: convert to use p.policy.<...> except for types, attrs, classes
         print "Classes:\t\t{}".format(len(p.classes))
         print "Types:\t\t\t{}".format(len(p.types))
         print "Attributes:\t\t{}".format(len(p.attrs))
@@ -387,209 +355,153 @@ def polinfo(args):
         print "Range_trans rules:\t{}".format(len(p.range_trans))
 
 
-def get_android_version(device):
-    """Get the Android version from a connected device"""
-    return check_output(
-        [adb, "-s", device, "shell", "getprop", "ro.build.version.release"]
-    ).strip('\r\n')
-
-
-def get_selinux_mode(device):
-    """Get the SELinux mode from a connected device"""
-    return check_output(
-        [adb, "-s", device, "shell", "getenforce"]).strip('\r\n')
-
-
-def get_processes(device):
-    """Get the processes from a connected device"""
-    if device is None:
-        return None
-    procs = {}
-    # Split by newlines and remove first line ("LABEL USER PID PPID NAME")
-    ps = check_output(
-        [adb, "-s", device, "shell", "ps", "-Z"]).split('\r\n')[1:]
-    for line in ps:
-        if line:
-            try:
-                p = ProcessOnDevice(line)
-            except Exception as e:
-                print e
-                continue
-            procs[p.pid] = p
-    return procs
-
-
-def process_picker(args, procs):
-    """Pick a process according to the command line arguments"""
-    p = None
+def process_picker(args, processes):
+    """Pick a process according to the command line arguments."""
+    candidate = None
     # Match by PID
-    if args.pid and args.pid in procs:
-        p = procs[args.pid]
+    if args.pid and args.pid in processes:
+        candidate = processes[args.pid]
     # Match by exact name
     elif args.process:
-        for i in procs.values():
-            if i.name == args.process:
-                p = i
+        for proc in processes.values():
+            if proc.name == args.process:
+                candidate = proc
                 break
-    # Match by partial name
-    if p is None:
-        for i in procs.values():
-            if args.process in i.name:
-                p = i
+    # If we haven't matched the PID or exact name, match the partial name
+    if candidate is None:
+        for proc in processes.values():
+            if args.process in proc.name:
+                candidate = proc
                 break
-    return p
-
-
-def get_files(device, root_adb, path='/', single_file=False):
-    """Get the files under the given path from a connected device"""
-    files_dict = {}
-    path = os.path.normpath(path)
-    if device is None:
-        return None
-    cmd = get_adb_call(device, root_adb, 'ls -RZ {}'.format(path))
-    listing = check_output(cmd).split('\r\n')
-    # Parse ls -RZ output for a single file
-    if single_file:
-        try:
-            f = FileOnDevice(listing[0], os.path.dirname(path))
-        except Exception as e:
-            print f
-            print e
-            return None
-        files_dict[f.absname] = f
-        return files_dict
-    # Parse ls -RZ output for a path
-    # For some reason, ls -RZ "<DIRECTORY>" output begins with a blank line.
-    # This makes parsing easier
-    new_dir = False
-    firstrun = True
-    for i in listing:
-        if new_dir:  # Initialise new directory
-            d = i.strip(':')
-            new_dir = False
-            continue
-        if not i:  # If the current line is empty, request new directory
-            new_dir = True
-            firstrun = False
-            continue
-        try:
-            f = FileOnDevice(i, d)
-        except Exception as e:
-            if firstrun:
-                # If this is the very first line, the command failed outright
-                print e
-                return None
-            print 'In directory "{}"'.format(d)
-            print e
-            continue
-        files_dict[f.absname] = f
-    return files_dict
+    return candidate
 
 
 def files(args):
     """List files from a device, with the option
     to filter by process that can access them"""
-    if not initialise_device(args):
-        sys.exit(1)
-
-    # TODO delete
-    #args.root_adb = check_root_adb(args.device)
-    # if args.root_adb == "not_root":
-    #    print "WARNING: Adb can not run as root on the device."
-    #    print "Information shown by the tool will be incomplete."
+    # Start initialization
+    # If we are not provided with a device, select one
+    if not args.device:
+        # Use the provided custom adb, if any
+        if args.adb:
+            devices = Device.get_devices(args.adb)
+        else:
+            devices = Device.get_devices()
+        args.device = device_picker(devices)
+    # Create the device
+    try:
+        # Use the provided custom adb, if any
+        if args.adb:
+            device = Device(args.device, args.adb)
+        else:
+            device = Device(args.device)
+    except ValueError as e:
+        self.log.error(e)
+        self.log.error("Could not create device, aborting...")
+        raise RuntimeError
+    p = Policy(device)
+    if not p:
+        self.log.error("You need to provide either a valid policy "
+                       "or a running Android device.")
+        raise RuntimeError
+    # End initialization
 
     global files_on_device_no
-    if not args.pid and not args.process:  # Just list all the files
-        files_dict = get_files(args.device, args.root_adb)
+    if not args.pid and not args.process:
+        # Just list all the files
+        # TODO: refactor all these heavy functions
+        files_dict = device.get_files()
         files_on_device_no = len(files_dict.keys())
-        accessible_files, file_permissions = files_filter(
-            None, None, files_dict)
-        print_files(args, None, accessible_files, file_permissions)
+        # TODO fix printing for unfiltered files
+        print_files(args, None, files_dict, None)
     else:
-        p = Policy(args.device)
-        if p is None:
-            print "You need to provide either a policy or a running Android device"
-            sys.exit(1)
-
-        processes_dict = get_processes(args.device)
-        process = process_picker(args, processes_dict)
+        # Filter the files by process
+        process = process_picker(args, device.get_processes())
         if process is None:
             if args.pid:
-                print "There is no process with PID {} running on the device.".format(args.pid)
+                self.log.error("There is no process with PID %s running "
+                               "on the device.", args.pid)
             elif args.process:
-                print 'There is no process "{}" running on the device'.format(args.process)
-            sys.exit(1)
-
-        print 'The "{}" process with PID {} is running in the "{}" context'.format(
-            process.name, process.pid, process.context)
-        files_dict = get_files(args.device, args.root_adb)
+                self.log.error("There is no process \"%s\" running "
+                               "on the device", args.process)
+            raise RuntimeError
+        self.log.info("The \"%s\" process with PID %s is running in the \"%s\""
+                      " context", process.name, process.pid, process.context)
+        # TODO: refactor all these heavy functions
+        files_dict = device.get_files()
+        # TODO: MARK
         files_on_device_no = len(files_dict.keys())
-        accessible_files, file_permissions = files_filter(
-            p, process, files_dict)
-        print_files(args, process, accessible_files, file_permissions)
+        file_permissions = get_process_permissions(p, process, files_dict)
+        print_files(args, process, files_dict, file_permissions)
 
 
-def files_filter(policy, process, files_dict):
-    """Filter files by a process that can access them"""
-    accessible_files = defaultdict(list)
-    if process is None:
-        accessible_types = None
-    else:
-        accessible_types = policy.get_types_accessible_by(process.context)
-    file_permissions = defaultdict(set)
+def get_process_permissions(policy, process, files_dict):
+    """Get the permissions a given process has on the given files.
 
-    if accessible_types is None:  # Just list all files
-        for f in files_dict.values():
-            accessible_files[f.context].append(f)
-    else:
-        for f in files_dict.values():
-            # TODO expand matching to full context?
-            if f.context.type in accessible_types:
-                # We have some rule to this target type
-                first_match = True
-                for r in accessible_types[f.context.type]:
-                    if f.security_class == r.security_class:
-                        # We have some rule applicable to this file class
-                        file_permissions[f].update(r.permissions)
-                        if first_match:
-                            accessible_files[f.context].append(f)
-                            first_match = False
-    return [accessible_files, file_permissions]
+    Returns a dictionary (filename, set(perms))."""
+    file_permissions = {}
+    accessible_types = policy.get_types_accessible_by(process.context)
+    for fname, f in files_dict.iteritems():
+        # TODO: expand matching to full context?
+        if f.context.type in accessible_types:
+            # We have some rule to this target type
+            first_match = True
+            for rule in accessible_types[f.context.type]:
+                if f.security_class == rule.tclass:
+                    # We have some rule applicable to this file class
+                    if fname in file_permissions:
+                        file_permissions[fname].update(rule.perms)
+                    else:
+                        file_permissions[fname] = rule.perms
+    return file_permissions
 
 
-def print_files(args, process, accessible_files, file_permissions):
-    """Print the filtered files"""
+def print_files(args, process, files_dict, file_permissions):
+    """Print a list of files.
+    If a process and file_permissions dictionary is supplied, also print
+    the permissions the process has on each file."""
     extension = "txt"
     # Sanitize arguments
     device_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-', args.device)
     if args.out:
-        file_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-',
-                          os.path.basename(args.out))
-    if process is not None:
+        file_out = os.path.abspath(args.out)
+    if process:
         process_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-', process.name)
 
-    # File counter (files stored in nested dicts, count while processing)
-    i = 0
+    # Print to file
     if args.out:
-        if process is not None:
-            output = "{}_files_{}_{}_{}_{}.{}".format(file_out, device_out,
-                                                      process.pid, process.context, process_out, extension)
+        if process:
+            output = "{0}_files_{1}_{2.pid}_{2.context}_{3}.{4}".format(
+                file_out, device_out, process, process_out, extension)
         else:
             output = "{}_files_{}.{}".format(file_out, device_out, extension)
-        print 'Printing to "{}"...'.format(output)
+        self.log.info("Printing to \"%s\"...", output)
         with open(output, "w") as thefile:
-            for fc in accessible_files.values():
-                i += len(fc)
-                for f in fc:
-                    out_line = f.absname
-                    if args.context:  # -Z or --context option
-                        out_line = "{} {}".format(f.context, out_line)
-                    # --permissions option requires a process
-                    if args.permissions and process is not None:
-                        out_line = "{}\t{} {{{}}}".format(out_line,
-                                                          f.security_class, " ".join(sorted(file_permissions[f])))
+            if process and file_permissions:
+                # Print only the files a process has permissions to
+                for fname, f in files_dict.iteritems():
+                    if fname in file_permissions:
+                        out_line = fname
+                        # -Z or --context option
+                        if args.context:
+                            out_line = f.context + " " + out_line
+                        # --permissions option
+                        if args.permissions:
+                            out_line += "\t" + f.security_class + " {"
+                            out_line += " ".join(
+                                sorted(file_permissions[fname])) + "}"
+                        print>>thefile, out_line
+            else:
+                # Print all files
+                for fname, f in files_dict.iteritems():
+                    out_line = fname
+                    # -Z or --context option
+                    if args.context:
+                        out_line = f.context + " " + out_line
                     print>>thefile, out_line
+    # Print to stdout
     else:
+        # TODO: MARK.1
         for fc in accessible_files.values():
             i += len(fc)
             for f in fc:
@@ -606,25 +518,6 @@ def print_files(args, process, accessible_files, file_permissions):
     if process is not None:
         print "The process has access to {} files.".format(i)
 
-
-def initialise_device(args):
-    """Initialise a device"""
-    if not args.device:  # Pick a device
-        args.device = device_picker()
-        if args.device is None:
-            return False
-    else:  # Verify a user-provided device
-        try:
-            check_call([adb, "-s", args.device, "shell", "true"])
-        except CalledProcessError:
-            print 'Device "{}" does not exist.'.format(args.device)
-            return False
-    print "Using device {}".format(args.device)
-    args.root_adb = check_root_adb(args.device)
-    if args.root_adb == "not_root":
-        print "WARNING: Adb can not run as root on the device."
-        print "Information shown by the tool will be incomplete."
-    return True
 
 ########################################
 # Processes
@@ -834,12 +727,7 @@ def main():
     parser_processes.set_defaults(func=processes)
 
     args = parser.parse_args()
-    global adb
-    if args.adb:
-        adb = args.adb
 
-    if not check_adb():
-        sys.exit(1)
     # Automatic callback from the argument parser
     # to the registered subcommand function
     args.func(args)

@@ -76,12 +76,10 @@ class Context(object):
 class Policy(object):
     """Class providing an abstraction for the SELinux policy"""
     # pylint: disable=too-many-instance-attributes
-    DEFAULT_POLICY_FILE = "/sys/fs/selinux/policy"
 
     def __init__(self, device, sepolicy=None):
         """Return a policy object, initialised from either a policy file or
         a connected Android device"""
-        # TODO modify "device" to be an instance of the Device class
         # Setup logging
         self.log = logging.getLogger(self.__class__.__name__)
         # Get the correct policy file
@@ -89,23 +87,24 @@ class Policy(object):
             # Get policy from device
             if device is None:
                 # We have no device and no policy, abort
-                raise RuntimeError(
+                raise ValueError(
                     "Invalid policy file \"{}\"".format(sepolicy))
+            # Prepare the location for the policy file
             self._tmpdir = tempfile.mkdtemp()
             self.name = os.path.join(self._tmpdir, "sepolicy")
+            # We manage the policy file (delete it when done)
             self._sepolicy_managed = True
+            # Try to get the policy from the device
             try:
-                subprocess.check_call([adb, "-s", device, "pull",
-                                       self.DEFAULT_POLICY_FILE, self.name])
-            except subprocess.CalledProcessError:
+                device.pull_policy(self.name)
+            except ValueError:
                 self.log.warning("Failed to get the policy from device \"%s\"",
                                  device)
                 raise
-            else:
-                self.log.debug("Copied policy \"%s:%s\" to \"%s\"", device,
-                               self.DEFAULT_POLICY_FILE, self.name)
         else:
+            # Work with the provided policy
             self.name = sepolicy
+            # It is preexisting: we don't manage it (don't delete it!)
             self._sepolicy_managed = False
         # Parse the policy file
         self.log.info("Parsing policy \"%s\"...", self.name)
