@@ -19,15 +19,14 @@
 """The SELinux Analytics Library"""
 
 from policy import Policy, Context
-from collections import defaultdict
 import argparse
-from subprocess import check_output, check_call, CalledProcessError
+import subprocess
 import readline
 import tempfile
 import os
 import sys
 import re
-import shlex
+import logging
 
 processes_on_device_no = 0
 files_on_device_no = 0
@@ -252,23 +251,6 @@ class ProcessOnDevice(object):
         return int(self._pid)
 
 
-def get_adb_call(device, root_adb, command):
-    """Return a list representing the adb command to run the command string"""
-    # TODO: merge in appropriate Device-class methods
-    call = [adb, "-s", device, "shell"]
-    if root_adb == "root_adb":
-        # Root adb-specific things
-        pass
-    elif root_adb == "root_shell":
-        # Root shell-specific things
-        call.extend(["su", "-c"])
-    elif root_adb == "not_root":
-        # Non root-specific things
-        pass
-    call.extend(shlex.split(command))
-    return call
-
-
 def device_picker(devices):
     """Select one of the devices"""
     if not devices:
@@ -308,16 +290,16 @@ def polinfo(args):
             else:
                 device = Device(args.device)
         except ValueError as e:
-            self.log.error(e)
-            self.log.error("Could not create device, aborting...")
+            logging.error(e)
+            logging.error("Could not create device, aborting...")
             raise RuntimeError
         p = Policy(device)
     else:
         # Use the provided policy
         p = Policy(None, args.policy)
     if not p:
-        self.log.error("You need to provide either a valid policy "
-                       "or a running Android device.")
+        logging.error("You need to provide either a valid policy "
+                      "or a running Android device.")
         raise RuntimeError
     # End initialisation
     print "Device {} is running Android {} with SELinux in {} mode.".format(
@@ -376,60 +358,66 @@ def process_picker(args, processes):
     return candidate
 
 
-def files(args):
-    """List files from a device, with the option
-    to filter by process that can access them"""
-    # Start initialization
-    # If we are not provided with a device, select one
-    if not args.device:
+def get_device(name, adb):
+    """Select a device name from the connected devices and return the
+    corresponding Device object."""
+    # Select a device name from the connected devices, if not already provided
+    if not name:
         # Use the provided custom adb, if any
-        if args.adb:
-            devices = Device.get_devices(args.adb)
+        if adb:
+            devices = Device.get_devices(adb)
         else:
             devices = Device.get_devices()
-        args.device = device_picker(devices)
+        name = device_picker(devices)
     # Create the device
     try:
         # Use the provided custom adb, if any
-        if args.adb:
-            device = Device(args.device, args.adb)
+        if adb:
+            device = Device(name, adb)
         else:
-            device = Device(args.device)
+            device = Device(name)
     except ValueError as e:
-        self.log.error(e)
-        self.log.error("Could not create device, aborting...")
+        logging.error(e)
+        logging.error("Could not create device, aborting...")
         raise RuntimeError
+    return device
+
+
+def files(args):
+    """List files from a device, with the option to filter them by a 
+    process that can access them."""
+    # Setup logging TODO: change
+    logging.basicConfig(level=logging.DEBUG)
+    # Start initialization
+    # Create the device
+    device = get_device(args.device, args.adb)
+    # Create the policy
     p = Policy(device)
     if not p:
-        self.log.error("You need to provide either a valid policy "
-                       "or a running Android device.")
+        logging.error("You need to provide a running Android device.")
         raise RuntimeError
     # End initialization
 
     global files_on_device_no
     if not args.pid and not args.process:
         # Just list all the files
-        # TODO: refactor all these heavy functions
         files_dict = device.get_files()
-        files_on_device_no = len(files_dict.keys())
-        # TODO fix printing for unfiltered files
+        files_on_device_no = len(files_dict)
         print_files(args, None, files_dict, None)
     else:
         # Filter the files by process
         process = process_picker(args, device.get_processes())
         if process is None:
             if args.pid:
-                self.log.error("There is no process with PID %s running "
-                               "on the device.", args.pid)
+                logging.error("There is no process with PID %s running "
+                              "on the device.", args.pid)
             elif args.process:
-                self.log.error("There is no process \"%s\" running "
-                               "on the device", args.process)
+                logging.error("There is no process \"%s\" running "
+                              "on the device", args.process)
             raise RuntimeError
-        self.log.info("The \"%s\" process with PID %s is running in the \"%s\""
-                      " context", process.name, process.pid, process.context)
-        # TODO: refactor all these heavy functions
+        logging.info("The \"%s\" process with PID %s is running in the \"%s\""
+                     " context", process.name, process.pid, process.context)
         files_dict = device.get_files()
-        # TODO: MARK
         files_on_device_no = len(files_dict.keys())
         file_permissions = get_process_permissions(p, process, files_dict)
         print_files(args, process, files_dict, file_permissions)
@@ -475,7 +463,7 @@ def print_files(args, process, files_dict, file_permissions):
                 file_out, device_out, process, process_out, extension)
         else:
             output = "{}_files_{}.{}".format(file_out, device_out, extension)
-        self.log.info("Printing to \"%s\"...", output)
+        logging.info("Printing to \"%s\"...", output)
         with open(output, "w") as thefile:
             if process and file_permissions:
                 # Print only the files a process has permissions to
@@ -501,17 +489,27 @@ def print_files(args, process, files_dict, file_permissions):
                     print>>thefile, out_line
     # Print to stdout
     else:
-        # TODO: MARK.1
-        for fc in accessible_files.values():
-            i += len(fc)
-            for f in fc:
-                out_line = f.absname
-                if args.context:  # -Z or --context option
-                    out_line = "{} {}".format(f.context, out_line)
-                # --permissions option requires a process
-                if args.permissions and process is not None:
-                    out_line = "{}\t{} {{{}}}".format(out_line,
-                                                      f.security_class, " ".join(sorted(file_permissions[f])))
+        if process and file_permissions:
+            # Print only the files a process has permissions to
+            for fname, f in files_dict.iteritems():
+                if fname in file_permissions:
+                    out_line = fname
+                    # -Z or --context option
+                    if args.context:
+                        out_line = f.context + " " + out_line
+                    # --permissions option
+                    if args.permissions:
+                        out_line += "\t" + f.security_class + " {"
+                        out_line += " ".join(
+                            sorted(file_permissions[fname])) + "}"
+                    print out_line
+        else:
+            # Print all files
+            for fname, f in files_dict.iteritems():
+                out_line = fname
+                # -Z or --context option
+                if args.context:
+                    out_line = f.context + " " + out_line
                 print out_line
 
     print "The device contains {} files.".format(files_on_device_no)
@@ -521,85 +519,88 @@ def print_files(args, process, files_dict, file_permissions):
 
 ########################################
 # Processes
-
-
 def processes(args):
-    """List processes on a device, with the option
-    to filter by a file they can access"""
-    if not initialise_device(args):
-        sys.exit(1)
+    """List processes on a device, with the option to filter them by a file
+    they can access."""
+    # Setup logging TODO: change
+    logging.basicConfig(level=logging.DEBUG)
+    # Start initialization
+    # Create the device
+    device = get_device(args.device, args.adb)
+    # Create the policy
+    p = Policy(device)
+    if not p:
+        logging.error("You need to provide a running Android device.")
+        raise RuntimeError
+    # End initialization
 
-    processes_dict = get_processes(args.device)
+    processes_dict = device.get_processes()
     global processes_on_device_no
-    processes_on_device_no = len(processes_dict.keys())
-    if not args.file and not args.path:  # Just list all the processes
-        result = processes_filter(None, None, processes_dict)
-        allowed_processes_by_file = result[0]
-        process_permissions_by_file = result[1]
-        print_processes(args, None, allowed_processes_by_file,
-                        process_permissions_by_file)
+    processes_on_device_no = len(processes_dict)
+    if not args.file and not args.path:
+        # Just list all the processes
+        print_processes(args, None, processes_dict, None)
     else:
-        p = Policy(args.device)
-        if p is None:
-            print "You need to provide either a policy or a running Android device"
-            sys.exit(1)
+        # Filter the processes by file
         if args.file:
-            files_dict = get_files(args.device, args.root_adb, args.file, True)
+            files_dict = device.get_file(args.file)
             if files_dict is None:
-                print 'File "{}" does not exist.'.format(args.file)
-                sys.exit(1)
+                logging.error("Invalid file \"%s\".", args.file)
+                raise RuntimeError
         else:
-            files_dict = get_files(args.device, args.root_adb, args.path)
+            files_dict = device.get_files(args.path)
             if files_dict is None:
-                print 'Folder "{}" does not exist.'.format(args.path)
-                sys.exit(1)
-        result = processes_filter(p, files_dict, processes_dict)
-        allowed_processes_by_file = result[0]
-        process_permissions_by_file = result[1]
-        print_processes(args, files_dict, allowed_processes_by_file,
-                        process_permissions_by_file)
+                logging.error("Invalid folder \"%s\".", args.file)
+                raise RuntimeError
+        proc_permissions = get_file_permissions(p, files_dict, processes_dict)
+        print_processes(args, files_dict, processes_dict, proc_permissions)
 
 
-def processes_filter(policy, files_dict, processes_dict):
-    """Filter processes by one or more files they can access"""
+def get_file_permissions(policy, files_dict, processes_dict):
+    """Get the processes that can access a set of files, with their related
+    permissions.
+
+    Returns a nested dictionary {file: {process: set(perms)}}."""
     allowed_processes_by_file = defaultdict(list)
-    if files_dict is None:
-        allowed_domains_by_file = None
-    else:
-        allowed_domains_by_file = defaultdict()
-        # Local variable not to query the policy for every file
-        domains_by_target = defaultdict()
-        for f in files_dict.values():
-            if f.context.type not in domains_by_target.keys():
-                domains_by_target[
-                    f.context.type] = policy.get_domains_allowed_to(f.context)
-            allowed_domains_by_file[f] = domains_by_target[f.context.type]
+    allowed_domains_by_file = defaultdict()
+    # Local variable not to query the policy for every file
+    hugemap = {}
+    # Prepare a nested dictionary [type][class]{domain: list(rules)}
+    # This contains all allow rules "allow domain type: class {...}"
+    # accessible by the three indexes [type], [class], [domain]
+    for f in files_dict.values():
+        if f.context.type not in hugemap:
+            # We don't know this type
+            hugemap[f.context.type] = {}
+        if f.security_class not in hugemap[f.context.type]:
+            # We don't know this [type][class] combination
+            t = policy.get_domains_allowed_to(f.context, f.security_class)
+            hugemap[f.context.type][f.security_class] = t
+    # Prepare the output dictionary
+    # This will be accessed as outmap[fname][pname], giving the set of
+    # permissions associated to each pair of values of the indexes
+    outmap = {}
+    # Process all files
+    for fname, f in files_dict.iteritems():
+        if fname not in outmap:
+            outmap[fname] = {}
+        for pname, p in processes_dict.iteritems():
+            if p.context.type in hugemap[f.context.type][f.security_class]:
+                # We have some rule from this type to the current file
+                if pname not in outmap[fname]:
+                    # If we don't have any permissions for this process yet
+                    outmap[fname][pname] = set()
+                for rule in hugemap[f.context.type][f.security_class][p.context.type]:
+                    outmap[fname][pname].update(rule.perms)
+    return outmap
 
-    process_permissions_by_file = defaultdict(lambda: defaultdict(set))
 
-    if allowed_domains_by_file is None:  # No files, list all processes
-        allowed_processes_by_file[None] = processes_dict
-    else:
-        for f in files_dict.values():
-            for p in processes_dict.values():
-                if p.context.type in allowed_domains_by_file[f]:
-                    # We have some rule from this type
-                    first_match = True
-                    for r in allowed_domains_by_file[f][p.context.type]:
-                        if f.security_class == r.security_class:
-                            # We have some rule applicable to this file class
-                            (process_permissions_by_file[f])[
-                                p].update(r.permissions)
-                            if first_match:
-                                allowed_processes_by_file[f].append(p)
-                                first_match = False
-    return [allowed_processes_by_file, process_permissions_by_file]
-
-
-def print_processes(args, files_dict, allowed_processes_by_file,
-                    process_permissions_by_file):
-    """Print filtered processes"""
+def print_processes(args, files_dict, processes_dict, proc_permissions):
+    """Print a list of processes.
+    If a files_dict and proc_permissions dictionary is supplied, also print
+    the permissions each process has on each file."""
     extension = "txt"
+    # TODO: MARK
     # Sanitize arguments
     device_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-', args.device)
     if args.out:

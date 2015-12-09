@@ -18,6 +18,7 @@
 and its components"""
 
 import setools
+import setools.policyrep
 import logging
 import tempfile
 import os
@@ -220,55 +221,48 @@ class Policy(object):
         """Get the types accessible from a given context.
 
         NOTE: the mapping currently ignores RBAC and MLS.
-        Returns a dictionary (target_type, list(rules))"""
+        Returns a dictionary (target_type, list(rules))."""
         if not context:
             raise RuntimeError("Invalid context \"{}\"".format(context))
         accessible_types = {}
-        # Get the source type from the context
-        src_types = [context.type]
-        # If an attribute, expand it
-        # TODO: does this make sense? does it ever happen?
-        if context.type in self.attrs:
-            src_types.extend(self.attrs[context.type])
+        # TODO: check that this works with policy as a keyword parameter
+        query = setools.terulequery.TERuleQuery(policy=self.policy,
+                                                ruletype="allow",
+                                                source=context.type)
         # Filter all rules
-        for rule in self.policy.terules():
-            # If we have an allow rule for one of the source types
-            if rule.ruletype == "allow" and rule.source in src_types:
-                # Add it to the dictionary
-                if rule.target in accessible_types:
-                    accessible_types[rule.target].append(rule)
-                else:
-                    accessible_types[rule.target] = [rule]
+        for rule in query.results()
+        # Add it to the dictionary
+            if rule.target in accessible_types:
+                accessible_types[rule.target].append(rule)
+            else:
+                accessible_types[rule.target] = [rule]
         return accessible_types
 
-    def get_domains_allowed_to(self, context):
-        """Return a dictionary of domains allowed to access a given type,
-        reversing the domain attributes relationships.
-        The dictionary keys are the domain names, and the dictionary values are
-        dictionaries of key "source type" and value "list of rules from type".
-        This should probably be improved by incapsulation in a proper object.
-        """
-        if not context:
-            raise RuntimeError("Invalid context \"{}\"".format(context))
+    def get_domains_allowed_to(self, context, security_class):
+        """Get the domains allowed to access a combination of context/class.
+
+        NOTE: currently the context match is performed only on the type.
+        Returns a dictionary (source_type, list(rules))."""
+        if not context or not security_class:
+            raise RuntimeError(
+                "Invalid context or class: \"{}\" {}".format(context,
+                                                             security_class))
         allowed_types = {}
-        # Get the target type from the context
-        target_types = [context.type]
-        # If an attribute, expand it
-        # TODO: does this make sense? does it ever happen?
-        if context.type in self.attrs:
-            target_types.extend(self.attrs[context.type])
+        # TODO: check that this works with policy as a keyword parameter
+        query = setools.terulequery.TERuleQuery(policy=self.policy,
+                                                ruletype="allow",
+                                                target=context.type,
+                                                tclass=security_class)
         # Filter all rules
-        for rule in self.policy.terules():
-            # If we have an allow rule for one of the target types
-            if rule.ruletype == "allow" and rule.target in target_types:
-                # Add it to the dictionary
-                if rule.source in allowed_types:
-                    allowed_types[rule.source].append(rule)
-                else:
-                    allowed_types[rule.source] = [rule]
-                # Sanity check: all source types are by definition domains,
-                # so they should be in the "domain" attribute
-                if rule.source not in self.attrs:
-                    self.log.warning("Rule source type is not in the"
-                                     " \"domain\" attribute: \"%s\"", rule)
+        for rule in query.results():
+            # Add it to the dictionary
+            if rule.source in allowed_types:
+                allowed_types[rule.source].append(rule)
+            else:
+                allowed_types[rule.source] = [rule]
+            # Sanity check: all source types are by definition domains,
+            # so they should be in the "domain" attribute
+            if rule.source not in self.attrs["domain"]:
+                self.log.warning("Rule source type is not in the"
+                                 " \"domain\" attribute: \"%s\"", rule)
         return allowed_types
