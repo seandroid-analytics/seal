@@ -165,7 +165,7 @@ class Device(object):
     def get_processes(self):
         """Get the processes running on the device.
 
-        Returns a dictionary (PID, ProcessOnDevice)."""
+        Returns a dictionary (PID, Process)."""
         processes = {}
         # Get ps output
         cmd = ["ps", "-Z"]
@@ -175,7 +175,7 @@ class Device(object):
         for line in ps:
             if line:
                 try:
-                    p = ProcessOnDevice(line)
+                    p = Process(line)
                 except ValueError as e:
                     self.log.warning(e)
                 else:
@@ -186,7 +186,7 @@ class Device(object):
         """Get the files under the given path from a connected device.
         The path must be a directory.
 
-        Returns a dictionary (filename, FileOnDevice)."""
+        Returns a dictionary (filename, File)."""
         files_dict = {}
         path = os.path.normpath(path)
         cmd = ["ls", "-RZ", "'" + path + "'"]
@@ -209,7 +209,7 @@ class Device(object):
                 continue
             # Regular line describing a file
             try:
-                f = FileOnDevice(line, directory)
+                f = File(line, directory)
             except ValueError as e:
                 if first_run:
                     # If this is the very first line of the output, the
@@ -226,17 +226,236 @@ class Device(object):
         """Get the file matching the given path from a connected device.
         The path must be a file.
 
-        Returns a dictionary (filename, FileOnDevice)."""
+        Returns a dictionary (filename, File)."""
         path = os.path.normpath(path)
         cmd = ["ls", "-RZ", "'" + path + "'"]
         listing = subprocess.check_output(self.shell + cmd).split('\r\n')
         # Parse ls -RZ output for a single file
         try:
-            f = FileOnDevice(listing[0], os.path.dirname(path))
+            f = File(listing[0], os.path.dirname(path))
         except ValueError as e:
             self.log.error("Invalid file \"%s\"", f)
             return None
         else:
             return {f.absname: f}
 
-    # TODO: port FileOnDevice and ProcessOnDevice to be defined here
+
+class File(object):
+    """Class providing an abstraction for a file on the device."""
+    file_class_converter = {'-': 'file',      'file':      '-',  # File
+                            'd': 'dir',       'dir':       'd',  # Directory
+                            'c': 'chr_file',  'chr_file':  'c',  # Character device
+                            'l': 'lnk_file',  'lnk_file':  'l',  # Symlink
+                            'p': 'fifo_file', 'fifo_file': 'p',  # Named pipe
+                            's': 'sock_file', 'sock_file': 's',  # Socket
+                            'b': 'blk_file',  'blk_file':  'b'}  # Block device
+
+    # TODO: re.compile?
+    correct_line = (
+        r'[-dclpsb][-rwxst]{9}\s+(?:[^\s]+\s+){2}(?:[^\s:]+:){3}[^\s:]+\s+.*')
+
+    def __init__(self, l, d):
+        if not re.match(File.correct_line, l):
+            raise Exception('Bad file "{}"'.format(l))
+        line = l.split(None, 4)
+        self._security_class = File.file_class_converter[line[0][0]]
+        self._dac = line[0]
+        self._user = line[1]
+        self._group = line[2]
+        self._context = Context(line[3])
+        if self._security_class == "lnk_file" and "->" in line[4]:
+            # If it is a symlink it has a target
+            self._basename = line[4].split(" -> ")[0]
+            self._target = line[4].split(" -> ")[1]
+        else:
+            self._basename = line[4]
+        self._path = d
+        self._absname = os.path.join(self._path, self._basename)
+
+    @property
+    def security_class(self):
+        """Get the file class"""
+        return self._security_class
+
+    @property
+    def dac(self):
+        """Get the file DAC permission string"""
+        return self._dac
+
+    @property
+    def user(self):
+        """Get the file DAC user"""
+        return self._user
+
+    @property
+    def group(self):
+        """Get the file DAC group"""
+        return self._group
+
+    @property
+    def context(self):
+        """Get the file SELinux context"""
+        return self._context
+
+    @property
+    def basename(self):
+        """Get the file basename"""
+        return self._basename
+
+    @property
+    def target(self):
+        """If the file is a symlink, get the link target"""
+        if self._security_class == "lnk_file":
+            return self._target
+        else:
+            return None
+
+    @property
+    def path(self):
+        """Get the file path"""
+        return self._path
+
+    @property
+    def absname(self):
+        """Get the file absolute name"""
+        return self._absname
+
+    def is_symlink(self):
+        """Returns True if the file is a symlink, False otherwise"""
+        if self._security_class == "lnk_file":
+            return True
+        else:
+            return False
+
+    def is_directory(self):
+        """Returns True if the file is a directory, False otherwise"""
+        if self._security_class == "dir":
+            return True
+        else:
+            return False
+
+    def __repr__(self):
+        return self.absname
+
+    def __eq__(self, other):
+        if self._absname == other._absname:
+            return True
+        else:
+            return False
+
+    def __lt__(self, other):
+        if self._absname < other._absname:
+            return True
+        else:
+            return False
+
+    def __le__(self, other):
+        if self._absname <= other._absname:
+            return True
+        else:
+            return False
+
+    def __ne__(self, other):
+        if self._absname != other._absname:
+            return True
+        else:
+            return False
+
+    def __gt__(self, other):
+        if self._absname > other._absname:
+            return True
+        else:
+            return False
+
+    def __ge__(self, other):
+        if self._absname >= other._absname:
+            return True
+        else:
+            return False
+
+    def __hash__(self):
+        return hash(self._absname)
+
+
+class Process(object):
+    """Class providing an abstraction for a process on the device"""
+    # TODO: re.compile?
+    correct_line = (
+        r'(?:[^\s:]+:){3}[^\s:]+\s+[^\s]+\s+[0-9]+\s+[0-9]+\s+[^\s]+.*')
+
+    def __init__(self, line):
+        if not re.match(Process.correct_line, line):
+            raise Exception('Bad process "{}"'.format(line))
+        p = line.split(None, 4)
+        self._context = Context(p[0])
+        self._user = p[1]
+        self._pid = p[2]
+        self._ppid = p[3]
+        self._name = p[4]
+
+    @property
+    def context(self):
+        """Get the process context"""
+        return self._context
+
+    @property
+    def user(self):
+        """Get the process UNIX user"""
+        return self._user
+
+    @property
+    def pid(self):
+        """Get the process PID"""
+        return self._pid
+
+    @property
+    def ppid(self):
+        """Get the process PPID"""
+        return self._ppid
+
+    @property
+    def name(self):
+        """Get the process name"""
+        return self._name
+
+    def __repr__(self):
+        return "{} {}".format(self._pid, self._name)
+
+    def __eq__(self, other):
+        if self._pid == other._pid:
+            return True
+        else:
+            return False
+
+    def __lt__(self, other):
+        if int(self._pid) < int(other._pid):
+            return True
+        else:
+            return False
+
+    def __le__(self, other):
+        if int(self._pid) <= int(other._pid):
+            return True
+        else:
+            return False
+
+    def __ne__(self, other):
+        if self._pid != other._pid:
+            return True
+        else:
+            return False
+
+    def __gt__(self, other):
+        if int(self._pid) > int(other._pid):
+            return True
+        else:
+            return False
+
+    def __ge__(self, other):
+        if int(self._pid) >= int(other._pid):
+            return True
+        else:
+            return False
+
+    def __hash__(self):
+        return int(self._pid)
