@@ -22,7 +22,6 @@ import setools.policyrep
 import logging
 import tempfile
 import os
-import subprocess
 
 
 class Context(object):
@@ -144,6 +143,10 @@ class Policy(object):
         self._attrs = self.__compute_attrs()
         self._domains = self.__compute_domains()
         self._classes = self.__compute_classes()
+        self._types_count = len(self.types)
+        self._attrs_count = len(self.attrs)
+        self._domains_count = len(self.domains)
+        self._classes_count = len(self.classes)
 
     def __del__(self):
         # Remove the temporary policy file if we manage it
@@ -177,8 +180,6 @@ class Policy(object):
     @property
     def types_count(self):
         """Get the number of policy types."""
-        if not hasattr(self, "_types_count"):
-            self._types_count = len(self.types)
         return self._types_count
 
     @property
@@ -191,8 +192,6 @@ class Policy(object):
     @property
     def attrs_count(self):
         """Get the number of policy attributes."""
-        if not hasattr(self, "_attrs_count"):
-            self._attrs_count = len(self.attrs)
         return self._attrs_count
 
     @property
@@ -205,8 +204,6 @@ class Policy(object):
     @property
     def domains_count(self):
         """Get the number of policy domains."""
-        if not hasattr(self, "_domains_count"):
-            self._domains_count = len(self.domains)
         return self._domains_count
 
     @property
@@ -219,8 +216,6 @@ class Policy(object):
     @property
     def classes_count(self):
         """Get the number of policy classes."""
-        if not hasattr(self, "_classes_count"):
-            self._classes_count = len(self.classes)
         return self._classes_count
 
     @property
@@ -280,7 +275,6 @@ class Policy(object):
         if not context:
             raise RuntimeError("Invalid context \"{}\"".format(context))
         accessible_types = {}
-        # TODO: check that this works with policy as a keyword parameter
         query = setools.terulequery.TERuleQuery(policy=self.policy,
                                                 ruletype=["allow"],
                                                 source=context.type)
@@ -303,7 +297,6 @@ class Policy(object):
                 "Invalid context or class: \"{}\" {}".format(context,
                                                              security_class))
         allowed_types = {}
-        # TODO: check that this works with policy as a keyword parameter
         query = setools.terulequery.TERuleQuery(policy=self.policy,
                                                 ruletype=["allow"],
                                                 target=context.type,

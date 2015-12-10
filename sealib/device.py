@@ -20,7 +20,7 @@ import subprocess
 import logging
 import os
 import re
-from policy import Context
+from sealib.policy import Context
 
 
 class Device(object):
@@ -35,7 +35,8 @@ class Device(object):
         Device.__start_adb(adb)
         # Split by newline and remove first line ("List of devices attached")
         # TODO: surround with try/except?
-        devices = subprocess.check_output([adb, "devices", "-l"]).split('\n')[1:]
+        devices = subprocess.check_output(
+            [adb, "devices", "-l"]).split('\n')[1:]
         return [x for x in devices if x]  # Remove empty strings
 
     @staticmethod
@@ -69,14 +70,13 @@ class Device(object):
         """Start adb if not started already"""
         try:
             with open(os.devnull, "w") as dnl:
-                # TODO: check if grepping for the string works or if we just
-                # need to grep "adb"
                 subprocess.check_call(["pgrep", "'" + adb + "'"], stdout=dnl)
         except subprocess.CalledProcessError:
             # adb is not running
             try:
                 # Try to start adb by calling "adb devices"
-                subprocess.check_call([adb, "devices"])
+                with open(os.devnull, "w") as dnl:
+                    subprocess.check_call([adb, "devices"], stdout=dnl)
             except subprocess.CalledProcessError:
                 raise RuntimeError("Could not start adb (\"{}\").".format(adb))
 
@@ -100,6 +100,8 @@ class Device(object):
             self.log.warning(
                 "Information shown by the tool will be incomplete.")
         self.shell = self.__get_adb_shell()
+        self._selinux_mode = None
+        self._android_version = None
 
     def pull_file(self, source, target):
         """Copy a file from the source path on the device to the target path
@@ -137,7 +139,7 @@ class Device(object):
             pass
         elif self.root_adb == "root_shell":
             # Root shell-specific things
-            call.extend(["su", "-c"])
+            shell.extend(["su", "-c"])
         elif self.root_adb == "not_root":
             # Non root-specific things
             pass
@@ -146,7 +148,7 @@ class Device(object):
     @property
     def android_version(self):
         """The device Android version."""
-        if not hasattr(self, "_android_version"):
+        if not self._android_version:
             # Get the Android version from the connected device
             cmd = ["getprop", "ro.build.version.release"]
             # TODO: surround with try/except?
@@ -157,7 +159,7 @@ class Device(object):
     @property
     def selinux_mode(self):
         """The device SELinux mode (enforcing/permissive)."""
-        if not hasattr(self, "_selinux_mode"):
+        if not self._selinux_mode:
             # Get the SELinux mode from the connected device
             cmd = ["getenforce"]
             # TODO: surround with try/except?
@@ -174,8 +176,8 @@ class Device(object):
         cmd = ["ps", "-Z"]
         # Split by newlines and remove first line ("LABEL USER PID PPID NAME")
         # TODO: surround with try/except?
-        ps = subprocess.check_output(self.shell + cmd).split('\r\n')[1:]
-        for line in ps:
+        psz = subprocess.check_output(self.shell + cmd).split('\r\n')[1:]
+        for line in psz:
             if line:
                 try:
                     p = Process(line)
@@ -237,7 +239,7 @@ class Device(object):
         try:
             f = File(listing[0], os.path.dirname(path))
         except ValueError as e:
-            self.log.error("Invalid file \"%s\"", f)
+            self.log.error(e)
             return None
         else:
             return {f.absname: f}
@@ -245,13 +247,15 @@ class Device(object):
 
 class File(object):
     """Class providing an abstraction for a file on the device."""
-    file_class_converter = {'-': 'file',      'file':      '-',  # File
-                            'd': 'dir',       'dir':       'd',  # Directory
-                            'c': 'chr_file',  'chr_file':  'c',  # Character device
-                            'l': 'lnk_file',  'lnk_file':  'l',  # Symlink
-                            'p': 'fifo_file', 'fifo_file': 'p',  # Named pipe
-                            's': 'sock_file', 'sock_file': 's',  # Socket
-                            'b': 'blk_file',  'blk_file':  'b'}  # Block device
+    file_class_converter = {
+        # pylint: disable=C0326
+        '-': 'file',      'file':      '-',  # File
+        'd': 'dir',       'dir':       'd',  # Directory
+        'c': 'chr_file',  'chr_file':  'c',  # Character device
+        'l': 'lnk_file',  'lnk_file':  'l',  # Symlink
+        'p': 'fifo_file', 'fifo_file': 'p',  # Named pipe
+        's': 'sock_file', 'sock_file': 's',  # Socket
+        'b': 'blk_file',  'blk_file':  'b'}  # Block device
 
     # TODO: re.compile?
     correct_line = (
@@ -341,43 +345,43 @@ class File(object):
         return self.absname
 
     def __eq__(self, other):
-        if self._absname == other._absname:
+        if self.absname == other.absname:
             return True
         else:
             return False
 
     def __lt__(self, other):
-        if self._absname < other._absname:
+        if self.absname < other.absname:
             return True
         else:
             return False
 
     def __le__(self, other):
-        if self._absname <= other._absname:
+        if self.absname <= other.absname:
             return True
         else:
             return False
 
     def __ne__(self, other):
-        if self._absname != other._absname:
+        if self.absname != other.absname:
             return True
         else:
             return False
 
     def __gt__(self, other):
-        if self._absname > other._absname:
+        if self.absname > other.absname:
             return True
         else:
             return False
 
     def __ge__(self, other):
-        if self._absname >= other._absname:
+        if self.absname >= other.absname:
             return True
         else:
             return False
 
     def __hash__(self):
-        return hash(self._absname)
+        return hash(self.absname)
 
 
 class Process(object):
@@ -422,43 +426,43 @@ class Process(object):
         return self._name
 
     def __repr__(self):
-        return "{} {}".format(self._pid, self._name)
+        return "{} {}".format(self.pid, self.name)
 
     def __eq__(self, other):
-        if self._pid == other._pid:
+        if self.pid == other.pid:
             return True
         else:
             return False
 
     def __lt__(self, other):
-        if int(self._pid) < int(other._pid):
+        if int(self.pid) < int(other.pid):
             return True
         else:
             return False
 
     def __le__(self, other):
-        if int(self._pid) <= int(other._pid):
+        if int(self.pid) <= int(other.pid):
             return True
         else:
             return False
 
     def __ne__(self, other):
-        if self._pid != other._pid:
+        if self.pid != other.pid:
             return True
         else:
             return False
 
     def __gt__(self, other):
-        if int(self._pid) > int(other._pid):
+        if int(self.pid) > int(other.pid):
             return True
         else:
             return False
 
     def __ge__(self, other):
-        if int(self._pid) >= int(other._pid):
+        if int(self.pid) >= int(other.pid):
             return True
         else:
             return False
 
     def __hash__(self):
-        return int(self._pid)
+        return int(self.pid)

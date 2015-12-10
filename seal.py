@@ -18,14 +18,11 @@
 
 """The SELinux Analytics Library command line frontend."""
 
-from sealib.policy import Policy, Context
+from sealib.policy import Policy
 import sealib.device
 import argparse
-import subprocess
-import readline
-import tempfile
+import readline  # pylint: disable=unused-import
 import os
-import sys
 import re
 import logging
 
@@ -39,9 +36,9 @@ def device_picker(devices):
         # Ask user which device
         while True:
             print "Choose a device:"
-            for i, x in enumerate(devices):
-                # TODO might want to change the formatting of x
-                print "[{}]\t{}".format(i, x)
+            for i, name in enumerate(devices):
+                # TODO might want to change the name formatting
+                print "[{}]\t{}".format(i, name)
             choice = raw_input("> ")
             if choice in [str(x) for x in range(len(devices))]:
                 break
@@ -53,7 +50,6 @@ def polinfo(args):
     # Setup logging TODO: change
     logging.basicConfig(level=logging.DEBUG)
     # Begin initialisation
-    p = None
     if not args.policy:
         # If we have no policy, use a device
         device = get_device(args.device, args.adb)
@@ -75,8 +71,8 @@ def polinfo(args):
 
     if args.info_domains:
         print "The policy contains {} domains:".format(p.domains_count)
-        for d in p.domains.keys():
-            print d
+        for dom in p.domains.keys():
+            print dom
     else:
         print "Classes:\t\t{}".format(p.classes_count)
         print "Types:\t\t\t{}".format(p.types_count)
@@ -105,21 +101,21 @@ def polinfo(args):
         print "Range_trans rules:\t{}".format(p.policy.range_transition_count)
 
 
-def process_picker(args, processes):
+def process_picker(args, proclist):
     """Pick a process according to the command line arguments."""
     candidate = None
     # Match by PID
-    if args.pid and args.pid in processes:
-        candidate = processes[args.pid]
+    if args.pid and args.pid in proclist:
+        candidate = proclist[args.pid]
     # Match by exact name
     elif args.process:
-        for proc in processes.values():
+        for proc in proclist.values():
             if proc.name == args.process:
                 candidate = proc
                 break
     # If we haven't matched the PID or exact name, match the partial name
     if candidate is None:
-        for proc in processes.values():
+        for proc in proclist.values():
             if args.process in proc.name:
                 candidate = proc
                 break
@@ -130,12 +126,15 @@ def get_device(name, adb):
     """Select a device name from the connected devices and return the
     corresponding Device object."""
     # Select a device name from the connected devices, if not already provided
-    if not name:
-        # Use the provided custom adb, if any
-        if adb:
-            devices = sealib.device.Device.get_devices(adb)
-        else:
-            devices = sealib.device.Device.get_devices()
+    # Use the provided custom adb, if any
+    if adb:
+        devices = sealib.device.Device.get_devices(adb)
+    else:
+        devices = sealib.device.Device.get_devices()
+    if name:
+        if name not in devices:
+            raise ValueError("Invalid device: \"{}\"".format(name))
+    else:
         name = device_picker(devices)
     # Create the device
     try:
@@ -162,11 +161,6 @@ def files(args):
     # Workaround, make sure we propagate the device name
     if not args.device:
         args.device = device.name
-    # Create the policy
-    p = Policy(device)
-    if not p:
-        logging.error("You need to provide a running Android device.")
-        raise RuntimeError
     # End initialization
 
     if not args.pid and not args.process:
@@ -174,6 +168,11 @@ def files(args):
         files_dict = device.get_files()
         print_files(args, None, files_dict, None)
     else:
+        # Create the policy
+        p = Policy(device)
+        if not p:
+            logging.error("You need to provide a running Android device.")
+            raise RuntimeError
         # Filter the files by process
         process = process_picker(args, device.get_processes())
         if process is None:
@@ -201,7 +200,6 @@ def get_process_permissions(policy, process, files_dict):
         # TODO: expand matching to full context?
         if f.context.type in accessible_types:
             # We have some rule to this target type
-            first_match = True
             for rule in accessible_types[f.context.type]:
                 if f.security_class == rule.tclass:
                     # We have some rule applicable to this file class
@@ -301,11 +299,6 @@ def processes(args):
     # Workaround, make sure we propagate the device name
     if not args.device:
         args.device = device.name
-    # Create the policy
-    p = Policy(device)
-    if not p:
-        logging.error("You need to provide a running Android device.")
-        raise RuntimeError
     # End initialization
 
     processes_dict = device.get_processes()
@@ -313,6 +306,11 @@ def processes(args):
         # Just list all the processes
         print_processes(args, None, processes_dict, None)
     else:
+        # Create the policy
+        p = Policy(device)
+        if not p:
+            logging.error("You need to provide a running Android device.")
+            raise RuntimeError
         # Filter the processes by file
         if args.file:
             files_dict = device.get_file(args.file)
@@ -344,8 +342,8 @@ def get_file_permissions(policy, files_dict, processes_dict):
             hugemap[f.context.type] = {}
         if f.security_class not in hugemap[f.context.type]:
             # We don't know this [type][class] combination
-            t = policy.get_domains_allowed_to(f.context, f.security_class)
-            hugemap[f.context.type][f.security_class] = t
+            dmns = policy.get_domains_allowed_to(f.context, f.security_class)
+            hugemap[f.context.type][f.security_class] = dmns
     # Prepare the output dictionary
     # This will be accessed as outmap[fname][pname], giving the set of
     # permissions associated to each pair of values of the indexes
