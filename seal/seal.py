@@ -28,9 +28,6 @@ import sys
 import re
 import logging
 
-processes_on_device_no = 0
-files_on_device_no = 0
-
 
 class FileOnDevice(object):
     """Class providing an abstraction for a file on the device"""
@@ -398,11 +395,9 @@ def files(args):
         raise RuntimeError
     # End initialization
 
-    global files_on_device_no
     if not args.pid and not args.process:
         # Just list all the files
         files_dict = device.get_files()
-        files_on_device_no = len(files_dict)
         print_files(args, None, files_dict, None)
     else:
         # Filter the files by process
@@ -418,7 +413,6 @@ def files(args):
         logging.info("The \"%s\" process with PID %s is running in the \"%s\""
                      " context", process.name, process.pid, process.context)
         files_dict = device.get_files()
-        files_on_device_no = len(files_dict.keys())
         file_permissions = get_process_permissions(p, process, files_dict)
         print_files(args, process, files_dict, file_permissions)
 
@@ -458,12 +452,15 @@ def print_files(args, process, files_dict, file_permissions):
 
     # Print to file
     if args.out:
+        # If we are filtering by a process, name the output file accordingly
         if process:
             output = "{0}_files_{1}_{2.pid}_{2.context}_{3}.{4}".format(
                 file_out, device_out, process, process_out, extension)
+        # We are not filtering by a process, name the output file accordingly
         else:
             output = "{}_files_{}.{}".format(file_out, device_out, extension)
         logging.info("Printing to \"%s\"...", output)
+        # Open file for printing
         with open(output, "w") as thefile:
             if process and file_permissions:
                 # Print only the files a process has permissions to
@@ -512,7 +509,7 @@ def print_files(args, process, files_dict, file_permissions):
                     out_line = f.context + " " + out_line
                 print out_line
 
-    print "The device contains {} files.".format(files_on_device_no)
+    print "The device contains {} files.".format(len(files_dict))
     if process is not None:
         print "The process has access to {} files.".format(i)
 
@@ -527,7 +524,7 @@ def processes(args):
     # Start initialization
     # Create the device
     device = get_device(args.device, args.adb)
-    # Create the policy
+    # Create the policytube.com/
     p = Policy(device)
     if not p:
         logging.error("You need to provide a running Android device.")
@@ -535,8 +532,6 @@ def processes(args):
     # End initialization
 
     processes_dict = device.get_processes()
-    global processes_on_device_no
-    processes_on_device_no = len(processes_dict)
     if not args.file and not args.path:
         # Just list all the processes
         print_processes(args, None, processes_dict, None)
@@ -600,79 +595,109 @@ def print_processes(args, files_dict, processes_dict, proc_permissions):
     If a files_dict and proc_permissions dictionary is supplied, also print
     the permissions each process has on each file."""
     extension = "txt"
-    # TODO: MARK
     # Sanitize arguments
     device_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-', args.device)
     if args.out:
-        file_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-',
-                          os.path.basename(args.out))
+        file_out = os.path.basename(args.out)
     if args.file:
         filep_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-', args.file)
     if args.path:
         path_out = re.sub(r'[^a-zA-Z-_0-9.:]', r'-', args.path)
 
+    # Print to file
     if args.out:
-        if files_dict is not None:
+        # If we are filtering by a file or path, name the output file
+        if files_dict and proc_permissions:
+            # If we are filtering by a file
             if args.file:
                 output = "{}_processes_{}_{}.{}".format(
                     file_out, device_out, filep_out, extension)
+            # If not, we are filtering by a path
             else:
                 output = "{}_processes_{}_{}.{}".format(
                     file_out, device_out, path_out, extension)
+        # We are not filtering by a file or path, name the output file
         else:
             output = "{}_processes_{}.{}".format(
                 file_out, device_out, extension)
-        print 'Printing to "{}"...'.format(output)
+        logging.info("Printing to \"%s\"...", output)
+        # Open the file for printing
         with open(output, "w") as thefile:
-            if files_dict is None:  # Just print all processes
-                print>>thefile, 'There are {} processes running on the device:'.format(
-                    processes_on_device_no)
-                for p in allowed_processes_by_file[None].values():
-                    # Setup output line
-                    out_line = "\t{}\t{}".format(p.pid, p.name)
-                    if args.context:
-                        out_line = "\t{}{}".format(p.context, out_line)
-                    print>>thefile, out_line
-            else:
-                print>>thefile, 'There are {} processes running on the device.'.format(
-                    processes_on_device_no)
-                for f, procs_list in allowed_processes_by_file.iteritems():
-                    print>>thefile, 'The {} "{}" in the context "{}" can be accessed by {} processes:'.format(
-                        f.security_class, f, f.context, len(procs_list))
-                    for p in procs_list:
+            if files_dict and proc_permissions:
+                # Print only the processes that have permissions on the file(s)
+                tmp = "There are {} processes running on the device."
+                print>>thefile, tmp.format(len(processes_dict))
+                # For each file some process has permissions to
+                for fname, procperm_dict in proc_permissions.iteritems():
+                    # Get the corresponding FileOnDevice object
+                    f = files_dict[fname]
+                    tmp = "The {} \"{}\" in the context \"{}\" can be " \
+                        "accessed by {} processes:"
+                    print>>thefile, tmp.format(f.security_class, fname,
+                                               f.context, len(procperm_dict))
+                    # For each process that has permissions over the cur file
+                    for pname, perms in procperm_dict.iteritems():
+                        # Get the corresponding ProcessOnDevice object
+                        p = processes_dict[pname]
                         # Setup output line
-                        out_line = "\t{}\t{}".format(p.pid, p.name)
+                        out_line = "\t{}\t{}".format(p.pid, pname)
+                        # -Z or --context option
                         if args.context:
-                            out_line = "\t{}{}".format(p.context, out_line)
+                            out_line = "\t" + p.context + out_line
+                        # --permissions option
                         if args.permissions:
-                            out_line = "{}\t{{{}}}".format(out_line,
-                                                           " ".join(sorted(process_permissions_by_file[f][p])))
+                            out_line += "\t{" + " ".join(sorted(perms)) + "}"
                         print>>thefile, out_line
-    else:
-        if files_dict is None:  # Just print all processes
-            print 'There are {} processes running on the device:'.format(
-                processes_on_device_no)
-            for p in allowed_processes_by_file[None].values():
-                # Setup output line
-                out_line = "{}\t{}".format(p.pid, p.name)
-                if args.context:
-                    out_line = "{}\t{}".format(p.context, out_line)
-                print out_line
-        else:
-            print 'There are {} processes running on the device.'.format(
-                processes_on_device_no)
-            for f, procs_list in allowed_processes_by_file.iteritems():
-                print 'The {} "{}" in the context "{}" can be accessed by {} processes:'.format(
-                    f.security_class, f, f.context, len(procs_list))
-                for p in procs_list:
+            else:
+                # Just print all processes
+                tmp = "There are {} processes running on the device:"
+                print>>thefile, tmp.format(len(processes_dict))
+                # For each process
+                for pname, p in processes_dict.iteritems():
                     # Setup output line
-                    out_line = "\t{}\t{}".format(p.pid, p.name)
+                    out_line = "\t{}\t{}".format(p.pid, pname)
+                    # -Z or --context option
                     if args.context:
-                        out_line = "\t{}{}".format(p.context, out_line)
+                        out_line = "\t" + p.context + out_line
+                    print>>thefile, out_line
+    else:
+        if files_dict and proc_permissions:
+            # Print only the processes that have permissions on the file(s)
+            tmp = "There are {} processes running on the device."
+            print tmp.format(len(processes_dict))
+            # For each file some process has permissions to
+            for fname, procperm_dict in proc_permissions.iteritems():
+                # Get the corresponding FileOnDevice object
+                f = files_dict[fname]
+                tmp = "The {} \"{}\" in the context \"{}\" can be " \
+                    "accessed by {} processes:"
+                print tmp.format(f.security_class, fname,
+                                 f.context, len(procperm_dict))
+                # For each process that has permissions over the cur file
+                for pname, perms in procperm_dict.iteritems():
+                    # Get the corresponding ProcessOnDevice object
+                    p = processes_dict[pname]
+                    # Setup output line
+                    out_line = "\t{}\t{}".format(p.pid, pname)
+                    # -Z or --context option
+                    if args.context:
+                        out_line = "\t" + p.context + out_line
+                    # --permissions option
                     if args.permissions:
-                        out_line = "{}\t{{{}}}".format(out_line,
-                                                       " ".join(sorted(process_permissions_by_file[f][p])))
+                        out_line += "\t{" + " ".join(sorted(perms)) + "}"
                     print out_line
+        else:
+            # Just print all processes
+            tmp = "There are {} processes running on the device:"
+            print tmp.format(len(processes_dict))
+            # For each process
+            for pname, p in processes_dict.iteritems():
+                # Setup output line
+                out_line = "\t{}\t{}".format(p.pid, pname)
+                # -Z or --context option
+                if args.context:
+                    out_line = "\t" + p.context + out_line
+                print out_line
 
 
 def main():
