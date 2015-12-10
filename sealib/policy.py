@@ -29,11 +29,28 @@ class Context(object):
     """Class providing an abstraction for a SELinux context"""
 
     def __init__(self, context):
-        if context and len(context.split(':')) == 4:
-            self._user = context.split(':')[0]
-            self._role = context.split(':')[1]
-            self._type = context.split(':')[2]
-            self._sens = context.split(':')[3]
+        # If the context string is not null and contains 4 or 5
+        # colon-delimited fields
+        if context and len(context.split(":")) in (4, 5):
+            # Split the context
+            ctx = context.split(":")
+            if len(ctx) == 4:
+                # If this is an old-style context
+                # e.g. "user:role:type:sensitivity"
+                self._fields = 4
+                self._user = ctx[0]
+                self._role = ctx[1]
+                self._type = ctx[2]
+                self._sens = ctx[3]
+            else:
+                # This is a new-style context(Android 6)
+                # e.g. "user:role:type:sensitivity:categories"
+                self._fields = 5
+                self._user = ctx[0]
+                self._role = ctx[1]
+                self._type = ctx[2]
+                self._sens = ctx[3]
+                self._cats = ctx[4].split(",")
         else:
             raise Exception('Bad context: "{}"'.format(context))
 
@@ -57,9 +74,19 @@ class Context(object):
         """Get the context sens"""
         return self._sens
 
+    @property
+    def cats(self):
+        """Get the context cats"""
+        return self._cats
+
     def __repr__(self):
-        return "{}:{}:{}:{}".format(
-            self._user, self._role, self._type, self._sens)
+        if self._fields == 4:
+            tmp = "{}:{}:{}:{}".format(self._user, self._role, self._type,
+                                       self._sens)
+        else:
+            tmp = "{}:{}:{}:{}:{}".format(self._user, self._role, self._type,
+                                          self._sens, ",".join(self.cats))
+        return tmp
 
     def __eq__(self, other):
         if str(self) == str(other):
@@ -125,10 +152,10 @@ class Policy(object):
             try:
                 os.remove(self.name)
             except OSError:
-                self.log.warning("Trying to remove policy.conf file \"%s\"... "
+                self.log.warning("Trying to remove policy file \"%s\"... "
                                  "failed!", self.name)
             else:
-                self.log.debug("Trying to remove policy.conf file \"%s\"... "
+                self.log.debug("Trying to remove policy file \"%s\"... "
                                "done!", self.name)
         if self._tmpdir:
             try:
@@ -150,7 +177,7 @@ class Policy(object):
     @property
     def types_count(self):
         """Get the number of policy types."""
-        if not hasattr(self, _types_count):
+        if not hasattr(self, "_types_count"):
             self._types_count = len(self.types)
         return self._types_count
 
@@ -164,7 +191,7 @@ class Policy(object):
     @property
     def attrs_count(self):
         """Get the number of policy attributes."""
-        if not hasattr(self, _attrs_count):
+        if not hasattr(self, "_attrs_count"):
             self._attrs_count = len(self.attrs)
         return self._attrs_count
 
@@ -178,7 +205,7 @@ class Policy(object):
     @property
     def domains_count(self):
         """Get the number of policy domains."""
-        if not hasattr(self, _domains_count):
+        if not hasattr(self, "_domains_count"):
             self._domains_count = len(self.domains)
         return self._domains_count
 
@@ -192,7 +219,7 @@ class Policy(object):
     @property
     def classes_count(self):
         """Get the number of policy classes."""
-        if not hasattr(self, _classes_count):
+        if not hasattr(self, "_classes_count"):
             self._classes_count = len(self.classes)
         return self._classes_count
 
@@ -255,11 +282,11 @@ class Policy(object):
         accessible_types = {}
         # TODO: check that this works with policy as a keyword parameter
         query = setools.terulequery.TERuleQuery(policy=self.policy,
-                                                ruletype="allow",
+                                                ruletype=["allow"],
                                                 source=context.type)
         # Filter all rules
-        for rule in query.results()
-        # Add it to the dictionary
+        for rule in query.results():
+            # Add it to the dictionary
             if rule.target in accessible_types:
                 accessible_types[rule.target].append(rule)
             else:
@@ -278,9 +305,9 @@ class Policy(object):
         allowed_types = {}
         # TODO: check that this works with policy as a keyword parameter
         query = setools.terulequery.TERuleQuery(policy=self.policy,
-                                                ruletype="allow",
+                                                ruletype=["allow"],
                                                 target=context.type,
-                                                tclass=security_class)
+                                                tclass=[security_class])
         # Filter all rules
         for rule in query.results():
             # Add it to the dictionary

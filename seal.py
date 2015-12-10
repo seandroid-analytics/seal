@@ -57,6 +57,9 @@ def polinfo(args):
     if not args.policy:
         # If we have no policy, use a device
         device = get_device(args.device, args.adb)
+        # Workaround, make sure we propagate the device name
+        if not args.device:
+            args.device = device.name
         p = Policy(device)
     else:
         # Use the provided policy
@@ -130,17 +133,17 @@ def get_device(name, adb):
     if not name:
         # Use the provided custom adb, if any
         if adb:
-            devices = Device.get_devices(adb)
+            devices = sealib.device.Device.get_devices(adb)
         else:
-            devices = Device.get_devices()
+            devices = sealib.device.Device.get_devices()
         name = device_picker(devices)
     # Create the device
     try:
         # Use the provided custom adb, if any
         if adb:
-            device = Device(name, adb)
+            device = sealib.device.Device(name, adb)
         else:
-            device = Device(name)
+            device = sealib.device.Device(name)
     except ValueError as e:
         logging.error(e)
         logging.error("Could not create device, aborting...")
@@ -149,13 +152,16 @@ def get_device(name, adb):
 
 
 def files(args):
-    """List files from a device, with the option to filter them by a 
+    """List files from a device, with the option to filter them by a
     process that can access them."""
     # Setup logging TODO: change
     logging.basicConfig(level=logging.DEBUG)
     # Start initialization
     # Create the device
     device = get_device(args.device, args.adb)
+    # Workaround, make sure we propagate the device name
+    if not args.device:
+        args.device = device.name
     # Create the policy
     p = Policy(device)
     if not p:
@@ -237,7 +243,7 @@ def print_files(args, process, files_dict, file_permissions):
                         out_line = fname
                         # -Z or --context option
                         if args.context:
-                            out_line = f.context + " " + out_line
+                            out_line = str(f.context) + " " + out_line
                         # --permissions option
                         if args.permissions:
                             out_line += "\t" + f.security_class + " {"
@@ -250,7 +256,7 @@ def print_files(args, process, files_dict, file_permissions):
                     out_line = fname
                     # -Z or --context option
                     if args.context:
-                        out_line = f.context + " " + out_line
+                        out_line = str(f.context) + " " + out_line
                     print>>thefile, out_line
     # Print to stdout
     else:
@@ -261,7 +267,7 @@ def print_files(args, process, files_dict, file_permissions):
                     out_line = fname
                     # -Z or --context option
                     if args.context:
-                        out_line = f.context + " " + out_line
+                        out_line = str(f.context) + " " + out_line
                     # --permissions option
                     if args.permissions:
                         out_line += "\t" + f.security_class + " {"
@@ -274,12 +280,12 @@ def print_files(args, process, files_dict, file_permissions):
                 out_line = fname
                 # -Z or --context option
                 if args.context:
-                    out_line = f.context + " " + out_line
+                    out_line = str(f.context) + " " + out_line
                 print out_line
 
     print "The device contains {} files.".format(len(files_dict))
-    if process is not None:
-        print "The process has access to {} files.".format(i)
+    if process and file_permissions:
+        print "The process has access to {} files.".format(len(file_permissions))
 
 
 ########################################
@@ -292,6 +298,9 @@ def processes(args):
     # Start initialization
     # Create the device
     device = get_device(args.device, args.adb)
+    # Workaround, make sure we propagate the device name
+    if not args.device:
+        args.device = device.name
     # Create the policy
     p = Policy(device)
     if not p:
@@ -324,8 +333,6 @@ def get_file_permissions(policy, files_dict, processes_dict):
     permissions.
 
     Returns a nested dictionary {file: {process: set(perms)}}."""
-    allowed_processes_by_file = defaultdict(list)
-    allowed_domains_by_file = defaultdict()
     # Local variable not to query the policy for every file
     hugemap = {}
     # Prepare a nested dictionary [type][class]{domain: list(rules)}
@@ -404,14 +411,14 @@ def print_processes(args, files_dict, processes_dict, proc_permissions):
                     print>>thefile, tmp.format(f.security_class, fname,
                                                f.context, len(procperm_dict))
                     # For each process that has permissions over the cur file
-                    for pname, perms in procperm_dict.iteritems():
+                    for pid, perms in procperm_dict.iteritems():
                         # Get the corresponding ProcessOnDevice object
-                        p = processes_dict[pname]
+                        p = processes_dict[pid]
                         # Setup output line
-                        out_line = "\t{}\t{}".format(p.pid, pname)
+                        out_line = "\t{}\t{}".format(pid, p.name)
                         # -Z or --context option
                         if args.context:
-                            out_line = "\t" + p.context + out_line
+                            out_line = "\t" + str(p.context) + out_line
                         # --permissions option
                         if args.permissions:
                             out_line += "\t{" + " ".join(sorted(perms)) + "}"
@@ -421,12 +428,12 @@ def print_processes(args, files_dict, processes_dict, proc_permissions):
                 tmp = "There are {} processes running on the device:"
                 print>>thefile, tmp.format(len(processes_dict))
                 # For each process
-                for pname, p in processes_dict.iteritems():
+                for pid, p in processes_dict.iteritems():
                     # Setup output line
-                    out_line = "\t{}\t{}".format(p.pid, pname)
+                    out_line = "\t{}\t{}".format(pid, p.name)
                     # -Z or --context option
                     if args.context:
-                        out_line = "\t" + p.context + out_line
+                        out_line = "\t" + str(p.context) + out_line
                     print>>thefile, out_line
     else:
         if files_dict and proc_permissions:
@@ -442,14 +449,14 @@ def print_processes(args, files_dict, processes_dict, proc_permissions):
                 print tmp.format(f.security_class, fname,
                                  f.context, len(procperm_dict))
                 # For each process that has permissions over the cur file
-                for pname, perms in procperm_dict.iteritems():
+                for pid, perms in procperm_dict.iteritems():
                     # Get the corresponding ProcessOnDevice object
-                    p = processes_dict[pname]
+                    p = processes_dict[pid]
                     # Setup output line
-                    out_line = "\t{}\t{}".format(p.pid, pname)
+                    out_line = "\t{}\t{}".format(pid, p.name)
                     # -Z or --context option
                     if args.context:
-                        out_line = "\t" + p.context + out_line
+                        out_line = "\t" + str(p.context) + out_line
                     # --permissions option
                     if args.permissions:
                         out_line += "\t{" + " ".join(sorted(perms)) + "}"
@@ -459,12 +466,12 @@ def print_processes(args, files_dict, processes_dict, proc_permissions):
             tmp = "There are {} processes running on the device:"
             print tmp.format(len(processes_dict))
             # For each process
-            for pname, p in processes_dict.iteritems():
+            for pid, p in processes_dict.iteritems():
                 # Setup output line
-                out_line = "\t{}\t{}".format(p.pid, pname)
+                out_line = "\t{}\t{}".format(pid, p.name)
                 # -Z or --context option
                 if args.context:
-                    out_line = "\t" + p.context + out_line
+                    out_line = "\t" + str(p.context) + out_line
                 print out_line
 
 

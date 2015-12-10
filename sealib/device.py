@@ -19,6 +19,8 @@
 import subprocess
 import logging
 import os
+import re
+from policy import Context
 
 
 class Device(object):
@@ -30,9 +32,10 @@ class Device(object):
     def get_devices(adb=DEFAULT_ADB):
         """Get the list of devices connected over adb."""
         # Check that adb is running
-        __start_adb(adb)
+        Device.__start_adb(adb)
         # Split by newline and remove first line ("List of devices attached")
-        devices = check_output([adb, "devices", "-l"]).split('\n')[1:]
+        # TODO: surround with try/except?
+        devices = subprocess.check_output([adb, "devices", "-l"]).split('\n')[1:]
         return [x for x in devices if x]  # Remove empty strings
 
     @staticmethod
@@ -73,11 +76,11 @@ class Device(object):
             # adb is not running
             try:
                 # Try to start adb by calling "adb devices"
-                check_call([adb, "devices"])
-            except CalledProcessError:
+                subprocess.check_call([adb, "devices"])
+            except subprocess.CalledProcessError:
                 raise RuntimeError("Could not start adb (\"{}\").".format(adb))
 
-    def __init__(self, name, adb=DEFAULT_POLICY_FILE):
+    def __init__(self, name, adb=DEFAULT_ADB):
         """Initialise a device"""
         # Setup logging
         self.log = logging.getLogger(self.__class__.__name__)
@@ -91,7 +94,7 @@ class Device(object):
         self.name = name
         self.adb = adb
         self.command = [self.adb, "-s", self.name]
-        self.root_adb = __check_root_adb(name, adb)
+        self.root_adb = Device.__check_root_adb(name, adb)
         if self.root_adb == "not_root":
             self.log.warning("Adb can not run as root on device \"%s\".", name)
             self.log.warning(
@@ -108,11 +111,11 @@ class Device(object):
         except subprocess.CalledProcessError as e:
             self.log.warning(e.msg)
             self.log.warning("Failed to copy \"%s:%s\" to %s",
-                             device, source, target)
+                             self.name, source, target)
             raise ValueError
         else:
             self.log.debug("Copied \"%s:%s\" to \"%s\"",
-                           device, source, target)
+                           self.name, source, target)
 
     def pull_policy(self, target, policy=DEFAULT_POLICY_FILE):
         """Copy the SELinux policy from the device to the target path.
@@ -129,13 +132,13 @@ class Device(object):
 
         Returns the command as a list."""
         shell = self.command + ["shell"]
-        if root_adb == "root_adb":
+        if self.root_adb == "root_adb":
             # Root adb-specific things
             pass
-        elif root_adb == "root_shell":
+        elif self.root_adb == "root_shell":
             # Root shell-specific things
             call.extend(["su", "-c"])
-        elif root_adb == "not_root":
+        elif self.root_adb == "not_root":
             # Non root-specific things
             pass
         return shell
@@ -143,7 +146,7 @@ class Device(object):
     @property
     def android_version(self):
         """The device Android version."""
-        if not hasattr(self, _android_version):
+        if not hasattr(self, "_android_version"):
             # Get the Android version from the connected device
             cmd = ["getprop", "ro.build.version.release"]
             # TODO: surround with try/except?
@@ -154,7 +157,7 @@ class Device(object):
     @property
     def selinux_mode(self):
         """The device SELinux mode (enforcing/permissive)."""
-        if not hasattr(self, _selinux_mode):
+        if not hasattr(self, "_selinux_mode"):
             # Get the SELinux mode from the connected device
             cmd = ["getenforce"]
             # TODO: surround with try/except?
@@ -252,13 +255,13 @@ class File(object):
 
     # TODO: re.compile?
     correct_line = (
-        r'[-dclpsb][-rwxst]{9}\s+(?:[^\s]+\s+){2}(?:[^\s:]+:){3}[^\s:]+\s+.*')
+        r'[-dclpsb][-rwxst]{9}\s+(?:[^\s]+\s+){2}(?:[^\s:]+:){3,}[^\s:]+\s+.*')
 
     def __init__(self, l, d):
         if not re.match(File.correct_line, l):
-            raise Exception('Bad file "{}"'.format(l))
+            raise ValueError('Bad file "{}"'.format(l))
         line = l.split(None, 4)
-        self._security_class = File.file_class_converter[line[0][0]]
+        self._security_class = File.file_class_converter[l[0]]
         self._dac = line[0]
         self._user = line[1]
         self._group = line[2]
@@ -381,11 +384,11 @@ class Process(object):
     """Class providing an abstraction for a process on the device"""
     # TODO: re.compile?
     correct_line = (
-        r'(?:[^\s:]+:){3}[^\s:]+\s+[^\s]+\s+[0-9]+\s+[0-9]+\s+[^\s]+.*')
+        r'(?:[^\s:]+:){3,}[^\s:]+\s+[^\s]+\s+[0-9]+\s+[0-9]+\s+[^\s]+.*')
 
     def __init__(self, line):
         if not re.match(Process.correct_line, line):
-            raise Exception('Bad process "{}"'.format(line))
+            raise ValueError('Bad process "{}"'.format(line))
         p = line.split(None, 4)
         self._context = Context(p[0])
         self._user = p[1]
