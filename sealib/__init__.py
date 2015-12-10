@@ -16,7 +16,6 @@
 #
 
 """SEAL - The SELinux Analytics Lybrary
-seal.seal - a command line device analysis tool and library
-seal.sealx - a graphical device analysis tool
 seal.policy - a SELinux policy abstraction library
+seal.device - an Android device abstraction library
 """
