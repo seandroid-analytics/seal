@@ -18,7 +18,7 @@
 
 """The SELinux Analytics Library"""
 
-from policy import Policy, Context
+from seal.policy import Policy, Context
 import argparse
 import subprocess
 import readline
@@ -268,28 +268,13 @@ def device_picker(devices):
 
 def polinfo(args):
     """Print policy information"""
+    # Setup logging TODO: change
+    logging.basicConfig(level=logging.DEBUG)
     # Begin initialisation
-    # TODO: add logging
     p = None
     if not args.policy:
         # If we have no policy, use a device
-        if not args.device:
-            # Use the provided custom adb, if any
-            if args.adb:
-                devices = Device.get_devices(args.adb)
-            else:
-                devices = Device.get_devices()
-            args.device = device_picker(devices)
-        try:
-            # Use the provided custom adb, if any
-            if args.adb:
-                device = Device(args.device, args.adb)
-            else:
-                device = Device(args.device)
-        except ValueError as e:
-            logging.error(e)
-            logging.error("Could not create device, aborting...")
-            raise RuntimeError
+        device = get_device(args.device, args.adb)
         p = Policy(device)
     else:
         # Use the provided policy
@@ -299,39 +284,40 @@ def polinfo(args):
                       "or a running Android device.")
         raise RuntimeError
     # End initialisation
+
     print "Device {} is running Android {} with SELinux in {} mode.".format(
         device, device.android_version, device.selinux_mode)
 
     if args.info_domains:
-        print "The policy contains {} domains:".format(len(p.domains))
-        for d in p.domains:
+        print "The policy contains {} domains:".format(p.domains_count)
+        for d in p.domains.keys():
             print d
     else:
-        # TODO: convert to use p.policy.<...> except for types, attrs, classes
-        print "Classes:\t\t{}".format(len(p.classes))
-        print "Types:\t\t\t{}".format(len(p.types))
-        print "Attributes:\t\t{}".format(len(p.attrs))
-        print "Domains:\t\t{}".format(len(p.domains))
-        print "Initial SIDs:\t\t{}".format(len(p.isids))
-        print "Capabilities:\t\t{}".format(len(p.polcaps))
-        print "Roles:\t\t\t{}".format(len(p.roles))
-        print "Users:\t\t\t{}".format(len(p.users))
-        print "Fs_uses:\t\t{}".format(len(p.fs_uses))
-        print "Genfscons:\t\t{}".format(len(p.genfscons))
-        print "Portcons:\t\t{}".format(len(p.portcons))
-        print "MLS sensitivities:\t{}".format(len(p.levels))
-        print "MLS categories:\t\t{}".format(len(p.cats))
-        print "MLS constraints:\t{}".format(len(p.constraints))
+        print "Classes:\t\t{}".format(p.classes_count)
+        print "Types:\t\t\t{}".format(p.types_count)
+        print "Attributes:\t\t{}".format(p.attrs_count)
+        print "Domains:\t\t{}".format(p.domains_count)
+        print "Initial SIDs:\t\t{}".format(p.policy.initialsids_count)
+        print "Capabilities:\t\t{}".format(p.policy.polcap_count)
+        print "Roles:\t\t\t{}".format(p.policy.role_count)
+        print "Users:\t\t\t{}".format(p.policy.user_count)
+        print "Fs_uses:\t\t{}".format(p.policy.fs_use_count)
+        print "Genfscons:\t\t{}".format(p.policy.genfscon_count)
+        print "Portcons:\t\t{}".format(p.policy.portcon_count)
+        print "MLS sensitivities:\t{}".format(p.policy.level_count)
+        print "MLS categories:\t\t{}".format(p.policy.category_count)
+        print "MLS constraints:\t{}".format(p.policy.constraint_count)
+        print "Permissive types:\t{}".format(p.policy.permissives_count)
 
-        print "Allow rules:\t\t{}".format(len(p.allow))
-        print "Auditallow rules:\t{}".format(len(p.auditallow))
-        print "Dontaudit rules:\t{}".format(len(p.dontaudit))
-        print "Type_trans rules:\t{}".format(len(p.type_trans))
-        print "Type_change rules:\t{}".format(len(p.type_change))
-        print "Type_member rules:\t{}".format(len(p.type_member))
-        print "Role_allow rules:\t{}".format(len(p.role_allow))
-        print "Role_trans rules:\t{}".format(len(p.role_trans))
-        print "Range_trans rules:\t{}".format(len(p.range_trans))
+        print "Allow rules:\t\t{}".format(p.policy.allow_count)
+        print "Auditallow rules:\t{}".format(p.policy.auditallow_count)
+        print "Dontaudit rules:\t{}".format(p.policy.dontaudit_count)
+        print "Type_trans rules:\t{}".format(p.policy.type_transition_count)
+        print "Type_change rules:\t{}".format(p.policy.type_change_count)
+        print "Type_member rules:\t{}".format(p.policy.type_member_count)
+        print "Role_allow rules:\t{}".format(p.policy.role_allow_count)
+        print "Role_trans rules:\t{}".format(p.policy.role_transition_count)
+        print "Range_trans rules:\t{}".format(p.policy.range_transition_count)
 
 
 def process_picker(args, processes):
@@ -524,7 +510,7 @@ def processes(args):
     # Start initialization
     # Create the device
     device = get_device(args.device, args.adb)
-    # Create the policytube.com/
+    # Create the policy
     p = Policy(device)
     if not p:
         logging.error("You need to provide a running Android device.")

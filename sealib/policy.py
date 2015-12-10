@@ -148,11 +148,25 @@ class Policy(object):
         return self._types
 
     @property
+    def types_count(self):
+        """Get the number of policy types."""
+        if not hasattr(self, _types_count):
+            self._types_count = len(self.types)
+        return self._types_count
+
+    @property
     def attrs(self):
         """Get the policy attributes as a dictionary of sets.
 
         Return a dictionary (attribute, set(types))."""
         return self._attrs
+
+    @property
+    def attrs_count(self):
+        """Get the number of policy attributes."""
+        if not hasattr(self, _attrs_count):
+            self._attrs_count = len(self.attrs)
+        return self._attrs_count
 
     @property
     def domains(self):
@@ -162,11 +176,25 @@ class Policy(object):
         return self._domains
 
     @property
+    def domains_count(self):
+        """Get the number of policy domains."""
+        if not hasattr(self, _domains_count):
+            self._domains_count = len(self.domains)
+        return self._domains_count
+
+    @property
     def classes(self):
         """Get the policy classes as a dictionary of sets.
 
         Return a dictionary (class, set(perms))."""
         return self._classes
+
+    @property
+    def classes_count(self):
+        """Get the number of policy classes."""
+        if not hasattr(self, _classes_count):
+            self._classes_count = len(self.classes)
+        return self._classes_count
 
     @property
     def policy(self):
