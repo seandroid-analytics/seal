@@ -18,7 +18,8 @@
 
 """The SELinux Analytics Library"""
 
-from seal.policy import Policy, Context
+from sealib.policy import Policy, Context
+import sealib.device
 import argparse
 import subprocess
 import readline
