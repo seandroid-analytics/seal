@@ -45,23 +45,23 @@ class Device(object):
         cmd = [adb, "-s", device]
         # Initially assume we are not root
         root_adb = "not_root"
-        # Check for increasingly high privilege levels
-        # Check wether 'su' exists
-        root_status = subprocess.check_output(
-            cmd + ["shell", "command", "-v", "su"]).strip('\r\n')
-        # If su exists, check if we can be root
-        if root_status:
-            root_status = subprocess.check_output(
-                cmd + ["shell", "su", "-c", "id"]).strip('\r\n')
-            if "uid=0(root) gid=0(root)" in root_status:
-                # We have a root shell
-                root_adb = "root_shell"
         # Try running adb as root
         root_status = subprocess.check_output(cmd + ["root"]).strip('\r\n')
         if (root_status == "adbd is already running as root" or
                 root_status == "restarting adbd as root"):
             # We have root
             root_adb = "root_adb"
+        else:
+            # Check wether 'su' exists
+            root_status = subprocess.check_output(
+                cmd + ["shell", "command", "-v", "su"]).strip('\r\n')
+            # If su exists, check if we can be root
+            if root_status:
+                root_status = subprocess.check_output(
+                    cmd + ["shell", "su", "-c", "id"]).strip('\r\n')
+                if "uid=0(root) gid=0(root)" in root_status:
+                    # We have a root shell
+                    root_adb = "root_shell"
         # Return our level of root
         return root_adb
 
@@ -70,13 +70,12 @@ class Device(object):
         """Start adb if not started already"""
         try:
             with open(os.devnull, "w") as dnl:
-                subprocess.check_call(["pgrep", "'" + adb + "'"], stdout=dnl)
+                subprocess.check_call(["pgrep", "adb"], stdout=dnl)
         except subprocess.CalledProcessError:
             # adb is not running
             try:
                 # Try to start adb by calling "adb devices"
-                with open(os.devnull, "w") as dnl:
-                    subprocess.check_call([adb, "devices"], stdout=dnl)
+                subprocess.check_call([adb, "devices"])
             except subprocess.CalledProcessError:
                 raise RuntimeError("Could not start adb (\"{}\").".format(adb))
 
@@ -87,6 +86,7 @@ class Device(object):
         if not name or not adb:
             raise ValueError("Bad device name or adb value.")
         # Verify the device name
+        # TODO: removing it would save time, check if we can do without
         try:
             subprocess.check_call([adb, "-s", name, "shell", "true"])
         except subprocess.CalledProcessError:
