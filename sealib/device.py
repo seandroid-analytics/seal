@@ -91,6 +91,8 @@ class Device(object):
             subprocess.check_call([adb, "-s", name, "shell", "true"])
         except subprocess.CalledProcessError:
             raise ValueError("Bad device name or adb value.")
+        else:
+            self.log.info("Using device \"%s\".", name)
         self.name = name
         self.adb = adb
         self.command = [self.adb, "-s", self.name]
@@ -257,12 +259,11 @@ class File(object):
         's': 'sock_file', 'sock_file': 's',  # Socket
         'b': 'blk_file',  'blk_file':  'b'}  # Block device
 
-    # TODO: re.compile?
-    correct_line = (
+    correct_line = re.compile(
         r'[-dclpsb][-rwxst]{9}\s+(?:[^\s]+\s+){2}(?:[^\s:]+:){3,}[^\s:]+\s+.*')
 
     def __init__(self, l, d):
-        if not re.match(File.correct_line, l):
+        if not File.correct_line.match(l):
             raise ValueError('Bad file "{}"'.format(l))
         line = l.split(None, 4)
         self._security_class = File.file_class_converter[l[0]]
@@ -386,12 +387,11 @@ class File(object):
 
 class Process(object):
     """Class providing an abstraction for a process on the device"""
-    # TODO: re.compile?
-    correct_line = (
+    correct_line = re.compile(
         r'(?:[^\s:]+:){3,}[^\s:]+\s+[^\s]+\s+[0-9]+\s+[0-9]+\s+[^\s]+.*')
 
     def __init__(self, line):
-        if not re.match(Process.correct_line, line):
+        if not Process.correct_line.match(line):
             raise ValueError('Bad process "{}"'.format(line))
         p = line.split(None, 4)
         self._context = Context(p[0])
