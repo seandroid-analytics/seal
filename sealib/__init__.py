@@ -1,5 +1,6 @@
 #
-# Copyright 2015 Filippo Bonazzi
+# Written by Filippo Bonazzi
+# Copyright (C) 2015 Aalto University
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +16,6 @@
 #
 
 """SEAL - The SELinux Analytics Lybrary
-seal.seal - a command line device analysis tool and library
-seal.sealx - a graphical device analysis tool
 seal.policy - a SELinux policy abstraction library
+seal.device - an Android device abstraction library
 """
