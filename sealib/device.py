@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-"""TODO: file docstring"""
+"""Utility module to handle an Android device."""
 
 import subprocess
 import logging
