@@ -188,7 +188,7 @@ class Device(object):
         for line in psz:
             if line:
                 try:
-                    p = Process(line)
+                    p = Process(line, self.android_version)
                 except ValueError as e:
                     self.log.warning(e)
                 else:
@@ -393,18 +393,42 @@ class File(object):
 
 class Process(object):
     """Class providing an abstraction for a process on the device"""
-    correct_line = re.compile(
+    # Do we support Android versions newer than 6.0.1 hoping they don't
+    # change the "ps -Z" output format anymore?
+    SUPPORT_NEWER_VERSIONS = True
+    # Android 6.0 and previous: LABEL USER PID PPID NAME
+    correct_line_6_0 = re.compile(
         r'(?:[^\s:]+:){3,}[^\s:]+\s+[^\s]+\s+[0-9]+\s+[0-9]+\s+[^\s]+.*')
+    # Android 6.0.1: LABEL USER PID PPID VSIZE RSS WCHAN PC STATUS NAME
+    correct_line_6_0_1 = re.compile(
+        r'(?:[^\s:]+:){3,}[^\s:]+\s+[^\s]+\s+(?:[0-9]+\s+){4}[^\s]+\s+[0-9a-e]+\s+[A-Z]\s+[^\s]+.*')
 
-    def __init__(self, line):
-        if not Process.correct_line.match(line):
-            raise ValueError('Bad process "{}"'.format(line))
-        p = line.split(None, 4)
-        self._context = Context(p[0])
-        self._user = p[1]
-        self._pid = p[2]
-        self._ppid = p[3]
-        self._name = p[4]
+    def __init__(self, line, android_version):
+        if android_version == "6.0" or int(android_version[0]) < 6:
+            if not Process.correct_line_6_0.match(line):
+                raise ValueError('Bad process "{}"'.format(line))
+            p = line.split(None, 4)
+            self._context = Context(p[0])
+            self._user = p[1]
+            self._pid = p[2]
+            self._ppid = p[3]
+            self._name = p[4]
+        elif android_version == "6.0.1" or Process.SUPPORT_NEWER_VERSIONS:
+            if not Process.correct_line_6_0_1.match(line):
+                raise ValueError('Bad process "{}"'.format(line))
+            p = line.split(None, 9)
+            self._context = Context(p[0])
+            self._user = p[1]
+            self._pid = p[2]
+            self._ppid = p[3]
+            self._vsize = p[4]
+            self._rss = p[5]
+            self._wchan = p[6]
+            self._pc = p[7]
+            self._status = p[8]
+            self._name = p[9]
+        else:
+            raise NotImplementedError("Unsupported Android version.")
 
     @property
     def context(self):
@@ -425,6 +449,46 @@ class Process(object):
     def ppid(self):
         """Get the process PPID"""
         return self._ppid
+
+    @property
+    def vsize(self):
+        """Get the process VSIZE"""
+        if hasattr(self, "_vsize"):
+            return self._vsize
+        else:
+            return None
+
+    @property
+    def rss(self):
+        """Get the process RSS"""
+        if hasattr(self, "_rss"):
+            return self._rss
+        else:
+            return None
+
+    @property
+    def wchan(self):
+        """Get the process WCHAN"""
+        if hasattr(self, "_wchan"):
+            return self._wchan
+        else:
+            return None
+
+    @property
+    def pc(self):
+        """Get the process PC"""
+        if hasattr(self, "_pc"):
+            return self._pc
+        else:
+            return None
+
+    @property
+    def status(self):
+        """Get the process status"""
+        if hasattr(self, "_status"):
+            return self._status
+        else:
+            return None
 
     @property
     def name(self):
