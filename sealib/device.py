@@ -30,14 +30,20 @@ class Device(object):
 
     @staticmethod
     def get_devices(adb=DEFAULT_ADB):
-        """Get the list of devices connected over adb."""
+        """Get the devices connected over adb.
+
+        Returns a dictionary {name: full_adb_line}."""
         # Check that adb is running
         Device.__start_adb(adb)
         # Split by newline and remove first line ("List of devices attached")
         # TODO: surround with try/except?
         devices = subprocess.check_output(
             [adb, "devices", "-l"]).split('\n')[1:]
-        return [x for x in devices if x]  # Remove empty strings
+        tmp = {}
+        for dev in devices:
+            if dev:
+                tmp[dev.split()[0]] = dev
+        return tmp
 
     @staticmethod
     def __check_root_adb(device, adb):
@@ -113,7 +119,7 @@ class Device(object):
         try:
             subprocess.check_call(self.command + ["pull", source, target])
         except subprocess.CalledProcessError as e:
-            self.log.warning(e.msg)
+            self.log.warning(e)
             self.log.warning("Failed to copy \"%s:%s\" to %s",
                              self.name, source, target)
             raise ValueError
