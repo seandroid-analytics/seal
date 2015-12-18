@@ -31,6 +31,8 @@ def device_picker(devices):
     """Select one of the devices"""
     if not devices:
         raise RuntimeError("No devices connected.")
+    if len(devices) == 1:
+        return devices.keys()[0]
     if len(devices) > 1:
         # Ask user which device
         devs = {}
@@ -74,8 +76,8 @@ def polinfo(args):
         # Use the provided policy
         p = Policy(None, args.policy)
     if not p:
-        logging.error("You need to provide either a valid policy "
-                      "or a running Android device.")
+        logging.critical("You need to provide either a valid policy "
+                         "or a running Android device.")
         raise RuntimeError
     # End initialisation
 
@@ -146,8 +148,9 @@ def get_device(name, adb):
         devices = sealib.device.Device.get_devices()
     if not name:
         name = device_picker(devices)
-    elif name not in devices:
-        raise ValueError("Invalid device: \"{}\"".format(name))
+    else:
+        if name not in devices:
+            raise ValueError("Invalid device: \"{}\"".format(name))
     # Create the device
     try:
         # Use the provided custom adb, if any
@@ -156,8 +159,8 @@ def get_device(name, adb):
         else:
             device = sealib.device.Device(name)
     except ValueError as e:
-        logging.error(e)
-        logging.error("Could not create device, aborting...")
+        logging.critical(e)
+        logging.critical("Could not create device, aborting...")
         raise RuntimeError
     return device
 
@@ -192,17 +195,17 @@ def files(args):
         # Create the policy
         p = Policy(device)
         if not p:
-            logging.error("You need to provide a running Android device.")
+            logging.critical("You need to provide a running Android device.")
             raise RuntimeError
         # Filter the files by process
         process = process_picker(args, device.get_processes())
         if process is None:
             if args.pid:
-                logging.error("There is no process with PID %s running "
-                              "on the device.", args.pid)
+                logging.critical("There is no process with PID %s running "
+                                 "on the device.", args.pid)
             elif args.process:
-                logging.error("There is no process \"%s\" running "
-                              "on the device", args.process)
+                logging.critical("There is no process \"%s\" running "
+                                 "on the device", args.process)
             raise RuntimeError
         logging.info("The \"%s\" process with PID %s is running in the \"%s\""
                      " context", process.name, process.pid, process.context)
@@ -339,18 +342,18 @@ def processes(args):
         # Create the policy
         p = Policy(device)
         if not p:
-            logging.error("You need to provide a running Android device.")
+            logging.critical("You need to provide a running Android device.")
             raise RuntimeError
         # Filter the processes by file
         if args.file:
             files_dict = device.get_file(args.file)
             if files_dict is None:
-                logging.error("Invalid file \"%s\".", args.file)
+                logging.critical("Invalid file \"%s\".", args.file)
                 raise RuntimeError
         else:
             files_dict = device.get_files(args.path)
             if files_dict is None:
-                logging.error("Invalid folder \"%s\".", args.file)
+                logging.critical("Invalid folder \"%s\".", args.file)
                 raise RuntimeError
         proc_permissions = get_file_permissions(p, files_dict, processes_dict)
         print_processes(args, files_dict, processes_dict, proc_permissions)
