@@ -479,9 +479,9 @@ def print_processes(args, files_dict, processes_dict, proc_permissions):
 def main():
     """The main function"""
     parser = argparse.ArgumentParser()
-    parser.add_argument('--adb',
+    parser.add_argument('--adb', metavar="<ADB>",
                         help="Path to your local root adb if not in your $PATH")
-    parser.add_argument('--device',
+    parser.add_argument("-s", "--device",
                         help="Specify a device to work with", metavar="<DEVICE>")
     subparsers = parser.add_subparsers(help='sub-command help')
     # Subparser for polinfo
