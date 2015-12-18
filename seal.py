@@ -51,8 +51,17 @@ def device_picker(devices):
 
 def polinfo(args):
     """Print policy information"""
-    # Setup logging TODO: change
-    logging.basicConfig(level=logging.DEBUG)
+    # Setup logging
+    if args.verbosity == 4:
+        logging.basicConfig(level=logging.DEBUG)
+    elif args.verbosity == 3:
+        logging.basicConfig(level=logging.INFO)
+    elif args.verbosity == 2:
+        logging.basicConfig(level=logging.WARNING)
+    elif args.verbosity == 1:
+        logging.basicConfig(level=logging.ERROR)
+    elif args.verbosity == 0:
+        logging.basicConfig(level=logging.CRITICAL)
     # Begin initialisation
     if not args.policy:
         # If we have no policy, use a device
@@ -156,8 +165,17 @@ def get_device(name, adb):
 def files(args):
     """List files from a device, with the option to filter them by a
     process that can access them."""
-    # Setup logging TODO: change
-    logging.basicConfig(level=logging.DEBUG)
+    # Setup logging
+    if args.verbosity == 4:
+        logging.basicConfig(level=logging.DEBUG)
+    elif args.verbosity == 3:
+        logging.basicConfig(level=logging.INFO)
+    elif args.verbosity == 2:
+        logging.basicConfig(level=logging.WARNING)
+    elif args.verbosity == 1:
+        logging.basicConfig(level=logging.ERROR)
+    elif args.verbosity == 0:
+        logging.basicConfig(level=logging.CRITICAL)
     # Start initialization
     # Create the device
     device = get_device(args.device, args.adb)
@@ -294,8 +312,17 @@ def print_files(args, process, files_dict, file_permissions):
 def processes(args):
     """List processes on a device, with the option to filter them by a file
     they can access."""
-    # Setup logging TODO: change
-    logging.basicConfig(level=logging.DEBUG)
+    # Setup logging
+    if args.verbosity == 4:
+        logging.basicConfig(level=logging.DEBUG)
+    elif args.verbosity == 3:
+        logging.basicConfig(level=logging.INFO)
+    elif args.verbosity == 2:
+        logging.basicConfig(level=logging.WARNING)
+    elif args.verbosity == 1:
+        logging.basicConfig(level=logging.ERROR)
+    elif args.verbosity == 0:
+        logging.basicConfig(level=logging.CRITICAL)
     # Start initialization
     # Create the device
     device = get_device(args.device, args.adb)
@@ -481,51 +508,63 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--adb', metavar="<ADB>",
                         help="Path to your local root adb if not in your $PATH")
-    parser.add_argument("-s", "--device",
-                        help="Specify a device to work with", metavar="<DEVICE>")
+    parser.add_argument("-s", "--device", metavar="<DEVICE>",
+                        help="Specify a device to work with")
     subparsers = parser.add_subparsers(help='sub-command help')
     # Subparser for polinfo
     parser_polinfo = subparsers.add_parser('polinfo',
                                            help='Show policy info from device')
-    parser_polinfo.add_argument('--policy',
-                                help="Show policy info from <FILE>", metavar="<FILE>")
+    parser_polinfo.add_argument('--policy', metavar="<FILE>",
+                                help="Show policy info from <FILE>")
     parser_polinfo.add_argument('--domains',
                                 help="Print the domains in the policy",
                                 action='store_true', dest="info_domains")
+    parser_polinfo.add_argument("-v", "--verbosity", metavar="<LVL>",
+                                choices=[0, 1, 2, 3, 4], type=int, default=0,
+                                help="Be verbose. Supported levels are 0-4, "
+                                "with 0 being the default.")
     parser_polinfo.set_defaults(func=polinfo)
     # Subparser for files
     parser_files = subparsers.add_parser('files',
                                          help='List all files on the device')
-    parser_files.add_argument('-Z', "--context",
-                              action='store_true', help='print the context of each file')
+    parser_files.add_argument('-Z', "--context", action='store_true',
+                              help='print the context of each file')
     parser_files.add_argument('--process',
-                              help="List files that process named <PROCESS> can access",
+                              help="List files that process named <PROCESS> can access.",
                               metavar="<PROCESS>")
     parser_files.add_argument('--pid',
-                              help="List files that process with PID <PID> can access",
+                              help="List files that process with PID <PID> can access.",
                               metavar="<PID>")
     parser_files.add_argument('--permissions',
                               help='Print SELinux permissions for every file',
                               action='store_true')
-    parser_files.add_argument("-o", "--out",
+    parser_files.add_argument("-o", "--out", metavar="<OUT>",
                               help="Write the file list to a file")
+    parser_files.add_argument("-v", "--verbosity", metavar="<LVL>",
+                              choices=[0, 1, 2, 3, 4], type=int, default=0,
+                              help="Be verbose. Supported levels are 0-4, "
+                              "with 0 being the default.")
     parser_files.set_defaults(func=files)
     # Subparser for processes
     parser_processes = subparsers.add_parser('processes',
-                                             help='List all processes on the device')
+                                             help='List all processes on the device.')
     parser_processes.add_argument('-Z', "--context", action='store_true',
-                                  help='print the context of each process')
+                                  help='print the context of each process.')
     parser_processes.add_argument('--file',
-                                  help="List processes that can access file <FILE>",
+                                  help="List processes that can access file <FILE>.",
                                   metavar="<FILE>")
     parser_processes.add_argument('--path',
-                                  help="List processes that can access files under path <PATH>",
+                                  help="List processes that can access files under path <PATH>.",
                                   metavar="<PATH>")
-    parser_processes.add_argument('--permissions',
-                                  help='Print SELinux permissions by each process on each file it has access to',
-                                  action='store_true')
-    parser_processes.add_argument("-o", "--out",
+    parser_processes.add_argument('--permissions', action='store_true',
+                                  help='Print SELinux permissions by each process'
+                                  'on each file it has access to.')
+    parser_processes.add_argument("-o", "--out", metavar="<OUT>",
                                   help="Write the process list to a file")
+    parser_processes.add_argument("-v", "--verbosity", metavar="<LVL>",
+                                  choices=[0, 1, 2, 3, 4], type=int, default=0,
+                                  help="Be verbose. Supported levels are 0-4, "
+                                  "with 0 being the default.")
     parser_processes.set_defaults(func=processes)
 
     args = parser.parse_args()
