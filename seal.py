@@ -31,18 +31,22 @@ def device_picker(devices):
     """Select one of the devices"""
     if not devices:
         raise RuntimeError("No devices connected.")
-    choice = 0
     if len(devices) > 1:
         # Ask user which device
+        devs = {}
+        for i, name in enumerate(devices):
+            devs[int(i)] = name
         while True:
+            # Print dialog and list of devices
             print "Choose a device:"
-            for i, name in enumerate(devices):
-                # TODO might want to change the name formatting
+            for i, name in devs.iteritems():
                 print "[{}]\t{}".format(i, name)
+            # Get the input
             choice = raw_input("> ")
-            if choice in [str(x) for x in range(len(devices))]:
-                break
-    return devices[int(choice)].split()[0]
+            # Check input range
+            if int(choice) in devs:
+                # If valid, return
+                return devs[int(choice)]
 
 
 def polinfo(args):
@@ -131,11 +135,10 @@ def get_device(name, adb):
         devices = sealib.device.Device.get_devices(adb)
     else:
         devices = sealib.device.Device.get_devices()
-    if name:
-        if name not in devices:
-            raise ValueError("Invalid device: \"{}\"".format(name))
-    else:
+    if not name:
         name = device_picker(devices)
+    elif name not in devices:
+        raise ValueError("Invalid device: \"{}\"".format(name))
     # Create the device
     try:
         # Use the provided custom adb, if any
