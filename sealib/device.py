@@ -405,7 +405,9 @@ class Process(object):
         r'(?:[^\s:]+:){3,}[^\s:]+\s+[^\s]+\s+(?:[0-9]+\s+){4}[^\s]+\s+[0-9a-f]+\s+[A-Z]\s+[^\s]+.*')
 
     def __init__(self, line, android_version):
-        if android_version == "6.0" or int(android_version[0]) < 6:
+        if android_version == "6.0" or\
+                (isinstance(android_version[0], int) and
+                 int(android_version[0]) < 6):
             if not Process.correct_line_6_0.match(line):
                 raise ValueError('Bad process "{}"'.format(line))
             p = line.split(None, 4)
