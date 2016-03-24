@@ -129,6 +129,7 @@ class Policy(object):
                                  device)
                 raise
         else:
+            self._tmpdir = None
             # Work with the provided policy
             self.name = sepolicy
             # It is preexisting: we don't manage it (don't delete it!)
