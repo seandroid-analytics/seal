@@ -18,13 +18,14 @@
 
 """The SELinux Analytics Library command line frontend."""
 
-from sealib.policy import Policy
-import sealib.device
 import argparse
 import readline  # pylint: disable=unused-import
 import os
+import sys
 import re
 import logging
+from sealib.policy import Policy
+import sealib.device
 
 
 def device_picker(devices):
