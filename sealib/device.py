@@ -184,8 +184,9 @@ class Device(object):
         cmd = ["ps", "-Z"]
         # Split by newlines and remove first line ("LABEL USER PID PPID NAME")
         # TODO: surround with try/except?
-        psz = subprocess.check_output(self.shell + cmd).split('\r\n')[1:]
+        psz = subprocess.check_output(self.shell + cmd).split('\n')[1:]
         for line in psz:
+            line = line.strip("\r")
             if line:
                 try:
                     p = Process(line, self.android_version)
