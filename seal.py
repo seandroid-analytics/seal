@@ -82,8 +82,9 @@ def polinfo(args):
         raise RuntimeError
     # End initialisation
 
-    print "Device {} is running Android {} with SELinux in {} mode.".format(
-        device, device.android_version, device.selinux_mode)
+    if not args.policy:
+        print "Device {} is running Android {} with SELinux in {} mode.".format(
+            device, device.android_version, device.selinux_mode)
 
     if args.info_domains:
         print "The policy contains {} domains:".format(p.domains_count)
