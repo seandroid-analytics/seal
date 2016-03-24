@@ -402,7 +402,7 @@ class Process(object):
         r'(?:[^\s:]+:){3,}[^\s:]+\s+[^\s]+\s+[0-9]+\s+[0-9]+\s+[^\s]+.*')
     # Android 6.0.1: LABEL USER PID PPID VSIZE RSS WCHAN PC STATUS NAME
     correct_line_6_0_1 = re.compile(
-        r'(?:[^\s:]+:){3,}[^\s:]+\s+[^\s]+\s+(?:[0-9]+\s+){4}[^\s]+\s+[0-9a-e]+\s+[A-Z]\s+[^\s]+.*')
+        r'(?:[^\s:]+:){3,}[^\s:]+\s+[^\s]+\s+(?:[0-9]+\s+){4}[^\s]+\s+[0-9a-f]+\s+[A-Z]\s+[^\s]+.*')
 
     def __init__(self, line, android_version):
         if android_version == "6.0" or int(android_version[0]) < 6:
