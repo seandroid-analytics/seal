@@ -217,16 +217,16 @@ class Device(object):
                 if first_run:
                     first_run = False
                 continue
+            # If the current line is empty, expect a new directory in the next
+            if not line:
+                new_dir = True
+                if first_run:
+                    first_run = False
+                continue
             # Initialise new directory
             if new_dir or first_run:
                 directory = line.strip(':')
                 new_dir = False
-                if first_run:
-                    first_run = False
-                continue
-            # If the current line is empty, expect a new directory in the next
-            if not line:
-                new_dir = True
                 if first_run:
                     first_run = False
                 continue
