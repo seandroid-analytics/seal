@@ -183,7 +183,11 @@ def files(args):
         logging.basicConfig(level=logging.CRITICAL)
     # Start initialization
     # Create the device
-    device = get_device(args.device, args.adb)
+    try:
+        device = get_device(args.device, args.adb)
+    except (RuntimeError, ValueError) as e:
+        logging.critical(e)
+        sys.exit(1)
     # Workaround, make sure we propagate the device name
     if not args.device:
         args.device = device.name
@@ -198,7 +202,7 @@ def files(args):
         p = Policy(device)
         if not p:
             logging.critical("You need to provide a running Android device.")
-            raise RuntimeError
+            sys.exit(1)
         # Filter the files by process
         process = process_picker(args, device.get_processes())
         if process is None:
@@ -208,7 +212,7 @@ def files(args):
             elif args.process:
                 logging.critical("There is no process \"%s\" running "
                                  "on the device", args.process)
-            raise RuntimeError
+            sys.exit(1)
         logging.info("The \"%s\" process with PID %s is running in the \"%s\""
                      " context", process.name, process.pid, process.context)
         files_dict = device.get_files()
@@ -345,18 +349,20 @@ def processes(args):
         p = Policy(device)
         if not p:
             logging.critical("You need to provide a running Android device.")
-            raise RuntimeError
+            sys.exit(1)
         # Filter the processes by file
         if args.file:
             files_dict = device.get_file(args.file)
             if files_dict is None:
-                logging.critical("Invalid file \"%s\".", args.file)
-                raise RuntimeError
+                logging.critical(
+                    "There is no file \"%s\" on the device.", args.file)
+                sys.exit(1)
         else:
             files_dict = device.get_files(args.path)
             if files_dict is None:
-                logging.critical("Invalid folder \"%s\".", args.file)
-                raise RuntimeError
+                logging.critical(
+                    "There is no folder \"%s\" on the device.", args.file)
+                sys.exit(1)
         proc_permissions = get_file_permissions(p, files_dict, processes_dict)
         print_processes(args, files_dict, processes_dict, proc_permissions)
 
