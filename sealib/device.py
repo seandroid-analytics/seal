@@ -203,27 +203,36 @@ class Device(object):
         Returns a dictionary (filename, File)."""
         files_dict = {}
         path = os.path.normpath(path)
-        cmd = ["ls", "-RZ", "'" + path + "'"]
-        listing = subprocess.check_output(self.shell + cmd).split('\r\n')
-        # Parse ls -RZ output for a directory
-        # For some reason, the output of ls -RZ "<DIRECTORY>" begins
+        cmd = ["ls", "-lRZ", "'" + path + "'"]
+        listing = subprocess.check_output(self.shell + cmd).split('\n')
+        # Parse ls -lRZ output for a directory
+        # For some reason, the output of ls -lRZ "<DIRECTORY>" begins
         # with a blank line. This makes parsing easier
         new_dir = False
         first_run = True
         for line in listing:
+            line = line.strip("\r")
+            # Skip "total" line
+            if line.startswith("total "):
+                if first_run:
+                    first_run = False
+                continue
             # Initialise new directory
-            if new_dir:
+            if new_dir or first_run:
                 directory = line.strip(':')
                 new_dir = False
+                if first_run:
+                    first_run = False
                 continue
             # If the current line is empty, expect a new directory in the next
             if not line:
                 new_dir = True
-                first_run = False
+                if first_run:
+                    first_run = False
                 continue
             # Regular line describing a file
             try:
-                f = File(line, directory)
+                f = File(line, directory, self.android_version)
             except ValueError as e:
                 if first_run:
                     # If this is the very first line of the output, the
@@ -242,11 +251,11 @@ class Device(object):
 
         Returns a dictionary (filename, File)."""
         path = os.path.normpath(path)
-        cmd = ["ls", "-RZ", "'" + path + "'"]
+        cmd = ["ls", "-lRZ", "'" + path + "'"]
         listing = subprocess.check_output(self.shell + cmd).split('\r\n')
-        # Parse ls -RZ output for a single file
+        # Parse ls -lRZ output for a single file
         try:
-            f = File(listing[0], os.path.dirname(path))
+            f = File(listing[0], os.path.dirname(path), self.android_version)
         except ValueError as e:
             self.log.error(e)
             return None
@@ -266,26 +275,60 @@ class File(object):
         's': 'sock_file', 'sock_file': 's',  # Socket
         'b': 'blk_file',  'blk_file':  'b'}  # Block device
 
-    correct_line = re.compile(
+    # Do we support Android versions newer than 6.0.1 hoping they don't
+    # change the "ls -lZ" output format anymore?
+    SUPPORT_NEWER_VERSIONS = True
+    # Android 6.0 and lower
+    # -rwxrwxrwx user group context name (-> target)
+    correct_line_6_0_1 = re.compile(
         r'[-dclpsb][-rwxst]{9}\s+(?:[^\s]+\s+){2}(?:[^\s:]+:){3,}[^\s:]+\s+.*')
+    # Android N
+    # -rwxrwxrwx #links user group context size(B) date time name (-> target)
+    correct_line_7_0 = re.compile(
+        r'[-dclpsb][-rwxst]{9}\s+(?:[0-9]+)\s+(?:[^\s]+\s+){2}(?:[^\s:]+:){3,}[^\s:]+\s+(?:[0-9]+)\s+(?:[0-9]{4}(?:-[0-9]{2}){2})\s+(?:[0-9]{2}:[0-9]{2}\s+.*)')
 
-    def __init__(self, l, d):
-        if not File.correct_line.match(l):
-            raise ValueError('Bad file "{}"'.format(l))
-        line = l.split(None, 4)
-        self._security_class = File.file_class_converter[l[0]]
-        self._dac = line[0]
-        self._user = line[1]
-        self._group = line[2]
-        self._context = Context(line[3])
-        if self._security_class == "lnk_file" and "->" in line[4]:
-            # If it is a symlink it has a target
-            self._basename = line[4].split(" -> ")[0]
-            self._target = line[4].split(" -> ")[1]
+    def __init__(self, l, d, android_version):
+        if android_version in ("6.0", "6.0.1") or\
+            (isinstance(android_version[0], int) and
+             int(android_version[0]) < 6):
+            if not File.correct_line_6_0_1.match(l):
+                raise ValueError('Bad file "{}"'.format(l))
+            line = l.split(None, 4)
+            self._security_class = File.file_class_converter[l[0]]
+            self._dac = line[0]
+            self._user = line[1]
+            self._group = line[2]
+            self._context = Context(line[3])
+            if self._security_class == "lnk_file" and "->" in line[4]:
+                # If it is a symlink it has a target
+                self._basename = line[4].split(" -> ")[0]
+                self._target = line[4].split(" -> ")[1]
+            else:
+                self._basename = line[4]
+            self._path = d
+            self._absname = os.path.join(self._path, self._basename)
+        elif android_version == "7.0" or File.SUPPORT_NEWER_VERSIONS:
+            if not File.correct_line_7_0.match(l):
+                raise ValueError('Bad file "{}"'.format(l))
+            line = l.split(None, 8)
+            self._security_class = File.file_class_converter[l[0]]
+            self._dac = line[0]
+            self._linkno = line[1]
+            self._user = line[2]
+            self._group = line[3]
+            self._context = Context(line[4])
+            self._size = line[5]  # TODO: new
+            self._lastdate = line[6]  # TODO: new
+            self._lasttime = line[7]  # TODO: new
+            if self._security_class == "lnk_file" and "->" in line[8]:
+                # If it is a symlink it has a target
+                self._basename, self._target = line[8].split(" -> ")
+            else:
+                self._basename = line[8]
+            self._path = d
+            self._absname = os.path.join(self._path, self._basename)
         else:
-            self._basename = line[4]
-        self._path = d
-        self._absname = os.path.join(self._path, self._basename)
+            raise NotImplementedError("Unsupported Android version.")
 
     @property
     def security_class(self):
@@ -296,6 +339,14 @@ class File(object):
     def dac(self):
         """Get the file DAC permission string"""
         return self._dac
+
+    @property
+    def linkno(self):
+        """Get the number of links to the file, if available."""
+        if hasattr(self, "_linkno"):
+            return self._linkno
+        else:
+            return None
 
     @property
     def user(self):
@@ -311,6 +362,30 @@ class File(object):
     def context(self):
         """Get the file SELinux context"""
         return self._context
+
+    @property
+    def size(self):
+        """Get the file size in Bytes, if available."""
+        if hasattr(self, "_size"):
+            return self._size
+        else:
+            return None
+
+    @property
+    def lastdate(self):
+        """Get the file last modifed date, if available."""
+        if hasattr(self, "_lastdate"):
+            return self._lastdate
+        else:
+            return None
+
+    @property
+    def lasttime(self):
+        """Get the file last modified time, if available."""
+        if hasattr(self, "_lasttime"):
+            return self._lasttime
+        else:
+            return None
 
     @property
     def basename(self):
