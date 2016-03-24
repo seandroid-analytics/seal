@@ -252,10 +252,11 @@ class Device(object):
         Returns a dictionary (filename, File)."""
         path = os.path.normpath(path)
         cmd = ["ls", "-lRZ", "'" + path + "'"]
-        listing = subprocess.check_output(self.shell + cmd).split('\r\n')
+        listing = subprocess.check_output(self.shell + cmd).split('\n')
+        line = listing[0].strip("\r")
         # Parse ls -lRZ output for a single file
         try:
-            f = File(listing[0], os.path.dirname(path), self.android_version)
+            f = File(line, os.path.dirname(path), self.android_version)
         except ValueError as e:
             self.log.error(e)
             return None
