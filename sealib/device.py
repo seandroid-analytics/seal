@@ -290,8 +290,8 @@ class File(object):
 
     def __init__(self, l, d, android_version):
         if android_version in ("6.0", "6.0.1") or\
-            (isinstance(android_version[0], int) and
-             int(android_version[0]) < 6):
+                (android_version[0].isdigit() and
+                 (int(android_version[0])) < 6):
             if not File.correct_line_6_0_1.match(l):
                 raise ValueError('Bad file "{}"'.format(l))
             line = l.split(None, 4)
@@ -482,8 +482,8 @@ class Process(object):
 
     def __init__(self, line, android_version):
         if android_version == "6.0" or\
-                (isinstance(android_version[0], int) and
-                 int(android_version[0]) < 6):
+                (android_version[0].isdigit() and
+                 int(android_version[0])) < 6:
             if not Process.correct_line_6_0.match(line):
                 raise ValueError('Bad process "{}"'.format(line))
             p = line.split(None, 4)
