@@ -202,9 +202,20 @@ class Device(object):
 
         Returns a dictionary (filename, File)."""
         files_dict = {}
+        listing = []
         path = os.path.normpath(path)
         cmd = ["ls", "-lRZ", "'" + path + "'"]
-        listing = subprocess.check_output(self.shell + cmd).split('\n')
+
+        # If the device is slow there can be errors produced when running down
+        # /proc (ls: /proc/10/exe: No such file or directory) particularly on
+        # the emulator. On exception this will just output a string containing
+        # all the entries, therefore on error convert output to a list as if
+        # nothing happened.
+        try:
+            listing = subprocess.check_output(self.shell + cmd).split('\n')
+        except subprocess.CalledProcessError as e:
+            listing = e.output.split('\n')
+
         # Parse ls -lRZ output for a directory
         # For some reason, the output of ls -lRZ "<DIRECTORY>" begins
         # with a blank line. This makes parsing easier
@@ -281,18 +292,18 @@ class File(object):
     SUPPORT_NEWER_VERSIONS = True
     # Android 6.0 and lower
     # -rwxrwxrwx user group context name (-> target)
-    correct_line_6_0_1 = re.compile(
+    correct_line_6_0 = re.compile(
         r'[-dclpsb][-rwxst]{9}\s+(?:[^\s]+\s+){2}(?:[^\s:]+:){3,}[^\s:]+\s+.*')
-    # Android N
+    # Android N is version 7 but 6.0.1 also has this format
     # -rwxrwxrwx #links user group context size(B) date time name (-> target)
-    correct_line_7_0 = re.compile(
+    correct_line_6_0_1 = re.compile(
         r'[-dclpsb][-rwxst]{9}\s+(?:[0-9]+)\s+(?:[^\s]+\s+){2}(?:[^\s:]+:){3,}[^\s:]+\s+(?:[0-9]+)\s+(?:[0-9]{4}(?:-[0-9]{2}){2})\s+(?:[0-9]{2}:[0-9]{2}\s+.*)')
 
     def __init__(self, l, d, android_version):
-        if android_version in ("6.0", "6.0.1") or\
+        if android_version in ("6.0") or\
                 (android_version[0].isdigit() and
                  (int(android_version[0])) < 6):
-            if not File.correct_line_6_0_1.match(l):
+            if not File.correct_line_6_0.match(l):
                 raise ValueError('Bad file "{}"'.format(l))
             line = l.split(None, 4)
             self._security_class = File.file_class_converter[l[0]]
@@ -308,8 +319,8 @@ class File(object):
                 self._basename = line[4]
             self._path = d
             self._absname = os.path.join(self._path, self._basename)
-        elif android_version == "7.0" or File.SUPPORT_NEWER_VERSIONS:
-            if not File.correct_line_7_0.match(l):
+        elif android_version == "6.0.1" or File.SUPPORT_NEWER_VERSIONS:
+            if not File.correct_line_6_0_1.match(l):
                 raise ValueError('Bad file "{}"'.format(l))
             line = l.split(None, 8)
             self._security_class = File.file_class_converter[l[0]]
