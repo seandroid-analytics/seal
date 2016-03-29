@@ -431,56 +431,32 @@ class File(object):
 
     def is_symlink(self):
         """Returns True if the file is a symlink, False otherwise"""
-        if self._security_class == "lnk_file":
-            return True
-        else:
-            return False
+        return self._security_class == "lnk_file"
 
     def is_directory(self):
         """Returns True if the file is a directory, False otherwise"""
-        if self._security_class == "dir":
-            return True
-        else:
-            return False
+        return self._security_class == "dir"
 
     def __repr__(self):
         return self.absname
 
     def __eq__(self, other):
-        if self.absname == other.absname:
-            return True
-        else:
-            return False
+        return self.absname == other.absname
 
     def __lt__(self, other):
-        if self.absname < other.absname:
-            return True
-        else:
-            return False
+        return self.absname < other.absname
 
     def __le__(self, other):
-        if self.absname <= other.absname:
-            return True
-        else:
-            return False
+        return self.absname <= other.absname
 
     def __ne__(self, other):
-        if self.absname != other.absname:
-            return True
-        else:
-            return False
+        return self.absname != other.absname
 
     def __gt__(self, other):
-        if self.absname > other.absname:
-            return True
-        else:
-            return False
+        return self.absname > other.absname
 
     def __ge__(self, other):
-        if self.absname >= other.absname:
-            return True
-        else:
-            return False
+        return self.absname >= other.absname
 
     def __hash__(self):
         return hash(self.absname)
@@ -601,40 +577,22 @@ class Process(object):
         return "{} {}".format(self.pid, self.name)
 
     def __eq__(self, other):
-        if self.pid == other.pid:
-            return True
-        else:
-            return False
+        return self.pid == other.pid
 
     def __lt__(self, other):
-        if int(self.pid) < int(other.pid):
-            return True
-        else:
-            return False
+        return int(self.pid) < int(other.pid)
 
     def __le__(self, other):
-        if int(self.pid) <= int(other.pid):
-            return True
-        else:
-            return False
+        return int(self.pid) <= int(other.pid)
 
     def __ne__(self, other):
-        if self.pid != other.pid:
-            return True
-        else:
-            return False
+        return self.pid != other.pid
 
     def __gt__(self, other):
-        if int(self.pid) > int(other.pid):
-            return True
-        else:
-            return False
+        return int(self.pid) > int(other.pid)
 
     def __ge__(self, other):
-        if int(self.pid) >= int(other.pid):
-            return True
-        else:
-            return False
+        return int(self.pid) >= int(other.pid)
 
     def __hash__(self):
         return int(self.pid)

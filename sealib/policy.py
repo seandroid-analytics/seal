@@ -88,10 +88,7 @@ class Context(object):
         return tmp
 
     def __eq__(self, other):
-        if str(self) == str(other):
-            return True
-        else:
-            return False
+        return str(self) == str(other)
 
     def __ne__(self, other):
         return not self == other
