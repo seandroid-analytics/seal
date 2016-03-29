@@ -66,20 +66,21 @@ def polinfo(args):
     elif args.verbosity == 0:
         logging.basicConfig(level=logging.CRITICAL)
     # Begin initialisation
-    if not args.policy:
-        # If we have no policy, use a device
-        device = get_device(args.device, args.adb)
-        # Workaround, make sure we propagate the device name
-        if not args.device:
-            args.device = device.name
-        p = Policy(device)
-    else:
-        # Use the provided policy
-        p = Policy(None, args.policy)
-    if not p:
+    try:
+        if not args.policy:
+            # If we have no policy, use a device
+            device = get_device(args.device, args.adb)
+            # Workaround, make sure we propagate the device name
+            if not args.device:
+                args.device = device.name
+            p = Policy(device)
+        else:
+            # Use the provided policy
+            p = Policy(None, args.policy)
+    except (ValueError, RuntimeError):
         logging.critical("You need to provide either a valid policy "
                          "or a running Android device.")
-        raise RuntimeError
+        sys.exit(1)
     # End initialisation
 
     if not args.policy:
@@ -149,10 +150,12 @@ def get_device(name, adb):
     else:
         devices = sealib.device.Device.get_devices()
     if not name:
+        # Raises RuntimeError if no devices connected
         name = device_picker(devices)
     else:
         if name not in devices:
-            raise ValueError("Invalid device: \"{}\"".format(name))
+            logging.critical("Invalid device: \"%s\"", name)
+            raise ValueError
     # Create the device
     try:
         # Use the provided custom adb, if any
@@ -185,8 +188,7 @@ def files(args):
     # Create the device
     try:
         device = get_device(args.device, args.adb)
-    except (RuntimeError, ValueError) as e:
-        logging.critical(e)
+    except (RuntimeError, ValueError):
         sys.exit(1)
     # Workaround, make sure we propagate the device name
     if not args.device:
@@ -199,8 +201,9 @@ def files(args):
         print_files(args, None, files_dict, None)
     else:
         # Create the policy
-        p = Policy(device)
-        if not p:
+        try:
+            p = Policy(device)
+        except (ValueError, RuntimeError):
             logging.critical("You need to provide a running Android device.")
             sys.exit(1)
         # Filter the files by process
@@ -213,8 +216,9 @@ def files(args):
                 logging.critical("There is no process \"%s\" running "
                                  "on the device", args.process)
             sys.exit(1)
-        logging.info("The \"%s\" process with PID %s is running in the \"%s\""
-                     " context", process.name, process.pid, process.context)
+        logging.info("The \"%s\" process with PID %s is running in the "
+                     "\"%s\" context", process.name, process.pid,
+                     process.context)
         files_dict = device.get_files()
         file_permissions = get_process_permissions(p, process, files_dict)
         print_files(args, process, files_dict, file_permissions)
@@ -313,7 +317,8 @@ def print_files(args, process, files_dict, file_permissions):
 
     print "The device contains {} files.".format(len(files_dict))
     if process and file_permissions:
-        print "The process has access to {} files.".format(len(file_permissions))
+        print "The process has access to {} files.".format(
+            len(file_permissions))
 
 
 ########################################
@@ -334,7 +339,10 @@ def processes(args):
         logging.basicConfig(level=logging.CRITICAL)
     # Start initialization
     # Create the device
-    device = get_device(args.device, args.adb)
+    try:
+        device = get_device(args.device, args.adb)
+    except (ValueError, RuntimeError):
+        sys.exit(1)
     # Workaround, make sure we propagate the device name
     if not args.device:
         args.device = device.name
@@ -346,8 +354,9 @@ def processes(args):
         print_processes(args, None, processes_dict, None)
     else:
         # Create the policy
-        p = Policy(device)
-        if not p:
+        try:
+            p = Policy(device)
+        except (ValueError, RuntimeError):
             logging.critical("You need to provide a running Android device.")
             sys.exit(1)
         # Filter the processes by file
@@ -363,7 +372,8 @@ def processes(args):
                 logging.critical(
                     "There is no folder \"%s\" on the device.", args.file)
                 sys.exit(1)
-        proc_permissions = get_file_permissions(p, files_dict, processes_dict)
+        proc_permissions = get_file_permissions(p, files_dict,
+                                                processes_dict)
         print_processes(args, files_dict, processes_dict, proc_permissions)
 
 

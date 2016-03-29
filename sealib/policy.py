@@ -114,8 +114,8 @@ class Policy(object):
             # Get policy from device
             if device is None:
                 # We have no device and no policy, abort
-                raise ValueError(
-                    "Invalid policy file \"{}\"".format(sepolicy))
+                self.log.critical("No policy available.")
+                raise ValueError
             # Prepare the location for the policy file
             self._tmpdir = tempfile.mkdtemp()
             self.name = os.path.join(self._tmpdir, "sepolicy")
@@ -138,7 +138,8 @@ class Policy(object):
         self.log.info("Parsing policy \"%s\"...", self.name)
         self._policy = setools.policyrep.SELinuxPolicy(self.name)
         if not self._policy:
-            raise RuntimeError("Invalid policy file \"{}\"".format(self.name))
+            self.log.critical("Invalid policy file \"%s\"", self.name)
+            raise RuntimeError
         # Initialize some useful variables
         self._types = self.__compute_types()
         self._attrs = self.__compute_attrs()
