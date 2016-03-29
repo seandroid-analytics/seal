@@ -17,11 +17,11 @@
 """A module providing several abstraction classes on a SELinux policy
 and its components"""
 
-import setools
-import setools.policyrep
 import logging
 import tempfile
 import os
+import setools
+import setools.policyrep
 
 
 class Context(object):

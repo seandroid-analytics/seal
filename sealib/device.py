@@ -217,8 +217,9 @@ class Device(object):
             listing = e.output.split('\n')
 
         # Parse ls -lRZ output for a directory
-        # For some reason, the output of ls -lRZ "<DIRECTORY>" begins
-        # with a blank line. This makes parsing easier
+        # In Android <=6.0 the output of ls -lRZ "<DIRECTORY>" begins
+        # with a blank line, in >=6.0.1 it doesn't.
+        # This is taken care of when parsing here.
         new_dir = False
         first_run = True
         for line in listing:
@@ -288,21 +289,26 @@ class File(object):
         'b': 'blk_file',  'blk_file':  'b'}  # Block device
 
     # Do we support Android versions newer than 6.0.1 hoping they don't
-    # change the "ls -lZ" output format anymore?
+    # change the "ls -l(R)Z" output format anymore?
     SUPPORT_NEWER_VERSIONS = True
     # Android 6.0 and lower
     # -rwxrwxrwx user group context name (-> target)
     correct_line_6_0 = re.compile(
         r'[-dclpsb][-rwxst]{9}\s+(?:[^\s]+\s+){2}(?:[^\s:]+:){3,}[^\s:]+\s+.*')
-    # Android N is version 7 but 6.0.1 also has this format
+    # Android 6.0.1, 7 (N Preview) and above
     # -rwxrwxrwx #links user group context size(B) date time name (-> target)
     correct_line_6_0_1 = re.compile(
         r'[-dclpsb][-rwxst]{9}\s+(?:[0-9]+)\s+(?:[^\s]+\s+){2}(?:[^\s:]+:){3,}[^\s:]+\s+(?:[0-9]+)\s+(?:[0-9]{4}(?:-[0-9]{2}){2})\s+(?:[0-9]{2}:[0-9]{2}\s+.*)')
 
-    def __init__(self, l, d, android_version):
-        if android_version in ("6.0") or\
-                (android_version[0].isdigit() and
-                 (int(android_version[0])) < 6):
+    def __init__(self, l, d, a_v):
+        """Initialize a File.
+
+        l   - the line in the Android ls -l(R)Z output
+        d   - the directory in which the file is
+        a_v - the Android version string ("5.1.1", "6.0", "N", ...)
+        """
+        # If this is an old-style file line (Android<=6.0)
+        if a_v == "6.0" or (a_v[0].isdigit() and (int(a_v[0])) < 6):
             if not File.correct_line_6_0.match(l):
                 raise ValueError('Bad file "{}"'.format(l))
             line = l.split(None, 4)
@@ -319,7 +325,8 @@ class File(object):
                 self._basename = line[4]
             self._path = d
             self._absname = os.path.join(self._path, self._basename)
-        elif android_version == "6.0.1" or File.SUPPORT_NEWER_VERSIONS:
+        # If this is a new-style file line (Android>=6.0.1)
+        elif a_v == "6.0.1" or File.SUPPORT_NEWER_VERSIONS:
             if not File.correct_line_6_0_1.match(l):
                 raise ValueError('Bad file "{}"'.format(l))
             line = l.split(None, 8)
@@ -329,9 +336,9 @@ class File(object):
             self._user = line[2]
             self._group = line[3]
             self._context = Context(line[4])
-            self._size = line[5]  # TODO: new
-            self._lastdate = line[6]  # TODO: new
-            self._lasttime = line[7]  # TODO: new
+            self._size = line[5]
+            self._lastdate = line[6]
+            self._lasttime = line[7]
             if self._security_class == "lnk_file" and "->" in line[8]:
                 # If it is a symlink it has a target
                 self._basename, self._target = line[8].split(" -> ")
@@ -491,10 +498,14 @@ class Process(object):
     correct_line_6_0_1 = re.compile(
         r'(?:[^\s:]+:){3,}[^\s:]+\s+[^\s]+\s+(?:[0-9]+\s+){4}[^\s]+\s+[0-9a-f]+\s+[A-Z]\s+[^\s]+.*')
 
-    def __init__(self, line, android_version):
-        if android_version == "6.0" or\
-                (android_version[0].isdigit() and
-                 int(android_version[0])) < 6:
+    def __init__(self, line, a_v):
+        """Initialize a Process.
+
+        line    - the line in the Android ps -Z output
+        a_v     - the Android version string ("5.1.1", "6.0", "N", ...)
+        """
+        # If this is an old-style process line (Android<=6.0)
+        if a_v == "6.0" or (a_v[0].isdigit() and (int(a_v[0])) < 6):
             if not Process.correct_line_6_0.match(line):
                 raise ValueError('Bad process "{}"'.format(line))
             p = line.split(None, 4)
@@ -503,7 +514,8 @@ class Process(object):
             self._pid = p[2]
             self._ppid = p[3]
             self._name = p[4]
-        elif android_version == "6.0.1" or Process.SUPPORT_NEWER_VERSIONS:
+        # If this is a new-style process line (Android>=6.0.1)
+        elif a_v == "6.0.1" or Process.SUPPORT_NEWER_VERSIONS:
             if not Process.correct_line_6_0_1.match(line):
                 raise ValueError('Bad process "{}"'.format(line))
             p = line.split(None, 9)
