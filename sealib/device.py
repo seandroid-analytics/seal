@@ -298,7 +298,9 @@ class File(object):
     # Android 6.0.1, 7 (N Preview) and above
     # -rwxrwxrwx #links user group context size(B) date time name (-> target)
     correct_line_6_0_1 = re.compile(
-        r'[-dclpsb][-rwxst]{9}\s+(?:[0-9]+)\s+(?:[^\s]+\s+){2}(?:[^\s:]+:){3,}[^\s:]+\s+(?:[0-9]+)\s+(?:[0-9]{4}(?:-[0-9]{2}){2})\s+(?:[0-9]{2}:[0-9]{2}\s+.*)')
+        r'[-dclpsb][-rwxst]{9}\s+(?:[0-9]+)\s+(?:[^\s]+\s+){2}'
+        r'(?:[^\s:]+:){3,}[^\s:]+\s+(?:[0-9]+(?:,\s+[0-9]+)?)\s+'
+        r'(?:[0-9]{4}(?:-[0-9]{2}){2})\s+(?:[0-9]{2}:[0-9]{2}\s+.*)')
 
     def __init__(self, l, d, a_v):
         """Initialize a File.
@@ -307,6 +309,8 @@ class File(object):
         d   - the directory in which the file is
         a_v - the Android version string ("5.1.1", "6.0", "N", ...)
         """
+        # TODO: change the parsing to matching groups in the regexes and
+        # extract parameters that way.
         # If this is an old-style file line (Android<=6.0)
         if a_v == "6.0" or (a_v[0].isdigit() and (int(a_v[0])) < 6):
             if not File.correct_line_6_0.match(l):
@@ -329,14 +333,30 @@ class File(object):
         elif a_v == "6.0.1" or File.SUPPORT_NEWER_VERSIONS:
             if not File.correct_line_6_0_1.match(l):
                 raise ValueError('Bad file "{}"'.format(l))
-            line = l.split(None, 8)
+            # If this is a character device or a block device, split the line
+            # in 9 to work around the "size" being two space-separated fields
+            #                                      vvvv
+            # e.g. crw-rw---- 1 r i u:o_r:i_d:s0 13,  63 2016-04-08 13:57 mice
+            if l[0] in "bc":
+                line = l.split(None, 9)
+            else:
+                line = l.split(None, 8)
             self._security_class = File.file_class_converter[l[0]]
             self._dac = line[0]
             self._linkno = line[1]
             self._user = line[2]
             self._group = line[3]
             self._context = Context(line[4])
-            self._size = line[5]
+            # If the file is a character device or a block device, this is not
+            # the size, but the driver number
+            if l[0] in "bc":
+                self._size = line[5] + " " + line[6]
+                # Remove the 6th argument after we're done, this way the list
+                # only goes to 8 and we don't need to change the numbering
+                # below
+                line.pop(6)
+            else:
+                self._size = line[5]
             self._lastdate = line[6]
             self._lasttime = line[7]
             if self._security_class == "lnk_file" and "->" in line[8]:
