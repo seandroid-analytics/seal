@@ -206,6 +206,9 @@ class Device(object):
         path = os.path.normpath(path)
         cmd = ["ls", "-lRZ", "'" + path + "'"]
 
+        # Get the File object for the top-level path
+        # We could not get it otherwise
+        files_dict.update(self.get_dir(path))
         # If the device is slow there can be errors produced when running down
         # /proc (ls: /proc/10/exe: No such file or directory) particularly on
         # the emulator. On exception this will just output a string containing
@@ -263,10 +266,32 @@ class Device(object):
 
         Returns a dictionary (filename, File)."""
         path = os.path.normpath(path)
-        cmd = ["ls", "-lRZ", "'" + path + "'"]
+        cmd = ["ls", "-lZ", "'" + path + "'"]
         listing = subprocess.check_output(self.shell + cmd).split('\n')
         line = listing[0].strip("\r")
-        # Parse ls -lRZ output for a single file
+        # Parse ls -lZ output for a single file
+        try:
+            f = File(line, os.path.dirname(path), self.android_version)
+        except ValueError as e:
+            self.log.error(e)
+            return None
+        else:
+            return {f.absname: f}
+
+    def get_dir(self, path):
+        """Get the directory matching the given path from a connected device.
+        The path must be a directory.
+
+        This only returns information on the single directory ("ls -ldZ"): to
+        get information about all the directory content recursively, use
+        get_files(path).
+
+        Returns a dictionary (filename, File)."""
+        path = os.path.normpath(path)
+        cmd = ["ls", "-ldZ", "'" + path + "'"]
+        listing = subprocess.check_output(self.shell + cmd).split('\n')
+        line = listing[0].strip("\r")
+        # Parse ls -ldZ output for a directory
         try:
             f = File(line, os.path.dirname(path), self.android_version)
         except ValueError as e:
