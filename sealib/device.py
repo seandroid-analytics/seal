@@ -341,6 +341,11 @@ class File(object):
             if not File.correct_line_6_0.match(l):
                 raise ValueError('Bad file "{}"'.format(l))
             line = l.split(None, 4)
+            # If we are processing the top-level directory, the "name" field
+            # will be empty in Android <= 6.0. Use the directory name
+            if len(line) == 4 and l[0] == "d":
+                # Put an empty value as the "name" field
+                line.append("")
             self._security_class = File.file_class_converter[l[0]]
             self._dac = line[0]
             self._user = line[1]
