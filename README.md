@@ -47,12 +47,17 @@ To use this package, add this path to your `$PYTHONPATH`; for example, on Ubuntu
 export PYTHONPATH="$WORKING_DIRECTORY/prebuilts/python/linux-x86/2.7.5/lib/python2.7/site-packages:$PYTHONPATH"
 ```
 
+SEALv2 also requires the Android Debug Bridge to be installed and in your `$PATH`.
+You may use the ADB which comes with the Android SDK (recommended), or install it through your distribution's package manager.
+
 ###SEALv1
 SEALv1 is no longer being developed.
 SEALv1 can be [downloaded from GitHub as a release](https://github.com/seandroid-analytics/seal/releases/tag/v1.0.0).
 
 The SEALv1 library requires the Python bindings to libapol and libqpol from [SEToolsv3](https://github.com/TresysTechnology/setools3).
 These can be obtained on Ubuntu 14.04 LTS by installing the `python-setools` package.
+SEALv1 also requires the Android Debug Bridge to be installed and in your `$PATH`.
+You may use the ADB which comes with the Android SDK (recommended), or install it through your distribution's package manager.
 
 
 ## Running SEAL
