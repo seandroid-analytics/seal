@@ -394,7 +394,7 @@ class File(object):
             self._lasttime = line[7]
             if self._security_class == "lnk_file" and "->" in line[8]:
                 # If it is a symlink it has a target
-                self._basename, self._target = line[8].decode('utf-8').split(" -> ")
+                self._basename, self._target = line[8].split(" -> ")
             else:
                 self._basename = line[8]
             self._path = d

@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 #
 # Written by Filippo Bonazzi
 # Copyright (C) 2015 Aalto University
